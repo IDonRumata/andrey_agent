@@ -4,6 +4,7 @@ from logging.handlers import RotatingFileHandler
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiogram.types import BotCommand, BotCommandScopeDefault
 
 import config
 import database as db
@@ -107,6 +108,30 @@ async def main():
     # Планировщик: брифинг вс 20:00, очистка кеша пн 04:00
     from services.scheduler import setup_scheduler
     setup_scheduler(bot, config.ALLOWED_USER_ID)
+
+    # Установить меню команд
+    await bot.set_my_commands([
+        BotCommand(command="tasks",    description="Активные задачи"),
+        BotCommand(command="ideas",    description="Список идей"),
+        BotCommand(command="projects", description="Список проектов"),
+        BotCommand(command="new",      description="Создать проект: /new название"),
+        BotCommand(command="brain",    description="Идеи за 7 дней"),
+        BotCommand(command="summary",  description="AI-резюме проекта"),
+        BotCommand(command="post",     description="Пост TG/Instagram: /post тема"),
+        BotCommand(command="tg",       description="Пост для канала Графин"),
+        BotCommand(command="hook",     description="3 цепляющих заголовка"),
+        BotCommand(command="caption",  description="Подпись Reels/Shorts"),
+        BotCommand(command="rewrite",  description="Рерайт под бренд"),
+        BotCommand(command="m",        description="Ввод метрик"),
+        BotCommand(command="stats",    description="Статистика за неделю/месяц"),
+        BotCommand(command="pushups",  description="Записать отжимания: /pushups N"),
+        BotCommand(command="briefing", description="Еженедельный отчёт"),
+        BotCommand(command="find",     description="Веб-поиск: /find запрос"),
+        BotCommand(command="done",     description="Закрыть задачу: /done ID"),
+        BotCommand(command="cost",     description="Расходы на AI за месяц"),
+        BotCommand(command="help",     description="Список всех команд"),
+    ], scope=BotCommandScopeDefault())
+    logger.info("Меню команд установлено")
 
     logger.info("Бот запущен. Polling...")
     await dp.start_polling(bot)
