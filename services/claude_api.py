@@ -25,7 +25,7 @@ MODELS = {
         "output_price": 4.00,  # $/1M output
     },
     "sonnet": {
-        "id": "claude-sonnet-4-5-20250514",
+        "id": "claude-sonnet-4-6",
         "input_price": 3.00,
         "output_price": 15.00,
     },
