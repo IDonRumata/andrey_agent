@@ -1,0 +1,24 @@
+[Unit]
+Description=Andrey AI Agent Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/andrey_agent
+ExecStart=/home/ubuntu/andrey_agent/.venv/bin/python bot.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+# Лимиты
+MemoryMax=512M
+CPUQuota=50%
+
+# Логирование в journald (дополнение к файловому)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=andrey-agent
+
+[Install]
+WantedBy=multi-user.target
