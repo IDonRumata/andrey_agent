@@ -71,6 +71,11 @@ async def cmd_start(message: types.Message):
         "📋 **Брифинг:** /briefing\n"
         "🔍 **Поиск:** /find [запрос]\n"
         "💰 **Расходы:** /cost\n\n"
+        "💼 **Портфель:**\n"
+        "/buy актив кол-во [цена] [биржа]\n"
+        "/sell ID [цена] — зафиксировать продажу\n"
+        "/portfolio — портфель с текущими ценами\n"
+        "/pnl — реализованная прибыль\n\n"
         "Или просто напиши/надиктуй — я пойму.",
         parse_mode="Markdown",
     )
@@ -93,7 +98,7 @@ async def main():
     logger.info("Проекты загружены в классификатор")
 
     # Импорт и подключение роутеров handlers
-    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, chat, voice
+    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, chat, voice, portfolio
     dp.include_router(tasks.router)
     dp.include_router(ideas.router)
     dp.include_router(content.router)
@@ -102,6 +107,7 @@ async def main():
     dp.include_router(search.router)
     dp.include_router(cost.router)
     dp.include_router(briefing.router)
+    dp.include_router(portfolio.router)
     dp.include_router(voice.router)
     dp.include_router(chat.router)  # chat последним - ловит всё остальное
 
@@ -127,9 +133,13 @@ async def main():
         BotCommand(command="pushups",  description="Записать отжимания: /pushups N"),
         BotCommand(command="briefing", description="Еженедельный отчёт"),
         BotCommand(command="find",     description="Веб-поиск: /find запрос"),
-        BotCommand(command="done",     description="Закрыть задачу: /done ID"),
-        BotCommand(command="cost",     description="Расходы на AI за месяц"),
-        BotCommand(command="help",     description="Список всех команд"),
+        BotCommand(command="done",      description="Закрыть задачу: /done ID"),
+        BotCommand(command="cost",      description="Расходы на AI за месяц"),
+        BotCommand(command="buy",       description="Купил актив: /buy BTC 0.001 69000 Bybit"),
+        BotCommand(command="sell",      description="Продал актив: /sell ID [цена]"),
+        BotCommand(command="portfolio", description="Мой портфель с текущими ценами"),
+        BotCommand(command="pnl",       description="Реализованная прибыль по сделкам"),
+        BotCommand(command="help",      description="Список всех команд"),
     ], scope=BotCommandScopeDefault())
     logger.info("Меню команд установлено")
 

@@ -98,6 +98,23 @@ async def init_db():
                 cost_usd REAL DEFAULT 0,
                 calls INTEGER DEFAULT 0
             );
+
+            -- Инвестиционный портфель
+            CREATE TABLE IF NOT EXISTS portfolio (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset TEXT NOT NULL,
+                asset_type TEXT NOT NULL,
+                exchange TEXT DEFAULT '',
+                quantity REAL NOT NULL,
+                buy_price REAL NOT NULL,
+                currency TEXT DEFAULT 'USD',
+                buy_date TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                status TEXT DEFAULT 'active',
+                sell_price REAL,
+                sell_date TEXT,
+                created_at DATETIME DEFAULT (datetime('now'))
+            );
         """)
         await db.commit()
 
@@ -475,6 +492,72 @@ async def get_token_usage(days: int = 30) -> list[dict]:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             "SELECT * FROM token_usage ORDER BY date DESC LIMIT ?", (days * 3,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+# ---- Портфель ----
+
+async def add_portfolio_entry(
+    asset: str, asset_type: str, exchange: str,
+    quantity: float, buy_price: float, currency: str,
+    buy_date: str, notes: str = ""
+) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """INSERT INTO portfolio
+               (asset, asset_type, exchange, quantity, buy_price, currency, buy_date, notes, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+            (asset.upper(), asset_type, exchange, quantity, buy_price, currency.upper(), buy_date, notes),
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_portfolio() -> list[dict]:
+    """Активные позиции."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM portfolio WHERE status = 'active' ORDER BY created_at DESC"
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def get_portfolio_entry(entry_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM portfolio WHERE id = ?", (entry_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def close_portfolio_entry(entry_id: int, sell_price: float, sell_date: str) -> dict | None:
+    """Зафиксировать продажу позиции."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM portfolio WHERE id = ? AND status = 'active'", (entry_id,)
+        )
+        entry = await cursor.fetchone()
+        if not entry:
+            return None
+        await db.execute(
+            "UPDATE portfolio SET status = 'sold', sell_price = ?, sell_date = ? WHERE id = ?",
+            (sell_price, sell_date, entry_id),
+        )
+        await db.commit()
+        return dict(entry)
+
+
+async def get_portfolio_history() -> list[dict]:
+    """Все закрытые позиции."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM portfolio WHERE status = 'sold' ORDER BY sell_date DESC"
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
