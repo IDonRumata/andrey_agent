@@ -98,7 +98,7 @@ async def main():
     logger.info("Проекты загружены в классификатор")
 
     # Импорт и подключение роутеров handlers
-    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, chat, voice, portfolio
+    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, chat, voice, portfolio, photo
     dp.include_router(tasks.router)
     dp.include_router(ideas.router)
     dp.include_router(content.router)
@@ -108,6 +108,7 @@ async def main():
     dp.include_router(cost.router)
     dp.include_router(briefing.router)
     dp.include_router(portfolio.router)
+    dp.include_router(photo.router)
     dp.include_router(voice.router)
     dp.include_router(chat.router)  # chat последним - ловит всё остальное
 

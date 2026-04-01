@@ -150,6 +150,51 @@ STRUCTURE_SYSTEM = (
 )
 
 
+async def ask_claude_vision(
+    image_base64: str,
+    media_type: str,
+    prompt: str,
+    system_prompt: str | None = None,
+) -> str:
+    """Отправить изображение в Claude Vision (Sonnet). ~$0.01-0.03 за фото."""
+    system = system_prompt or config.SYSTEM_PROMPT
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": image_base64,
+                    },
+                },
+                {"type": "text", "text": prompt},
+            ],
+        }
+    ]
+    model_info = MODELS["sonnet"]
+    try:
+        response = await client.messages.create(
+            model=model_info["id"],
+            max_tokens=config.CLAUDE_MAX_TOKENS,
+            system=system,
+            messages=messages,
+        )
+    except Exception as e:
+        logger.error("Claude Vision error: %s", e)
+        return f"Ошибка Vision API: {e}"
+
+    text = response.content[0].text
+    input_tok = response.usage.input_tokens
+    output_tok = response.usage.output_tokens
+    cost = _calc_cost("sonnet", input_tok, output_tok)
+    await db.log_token_usage("sonnet", input_tok, output_tok, cost)
+    logger.info("Claude Vision: %d+%d tok = $%.4f", input_tok, output_tok, cost)
+    return text
+
+
 async def structure_entry(raw_text: str) -> dict:
     """Структурировать запись по проекту через Haiku."""
     response = await ask_claude(
