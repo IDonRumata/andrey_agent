@@ -69,11 +69,11 @@ SEARCH_PATTERNS = [
 
 # Паттерны для метрик и физических упражнений
 METRIC_PATTERNS = [
-    # Отжимания
-    re.compile(r"(\d+)\s*отжимани[йя]", re.IGNORECASE),
-    re.compile(r"отжимани[йя]\s*(\d+)", re.IGNORECASE),
-    re.compile(r"сделал.*?(\d+)\s*отжимани[йя]", re.IGNORECASE),
-    re.compile(r"(\d+)\s*раз.*отжа", re.IGNORECASE),
+    # Отжимания + Whisper-варианты
+    re.compile(r"(\d+)\s*от[жш][иеы]мани[йяе]", re.IGNORECASE),
+    re.compile(r"от[жш][иеы]мани[йяе]\s*(\d+)", re.IGNORECASE),
+    re.compile(r"сделал.*?(\d+)\s*от[жш][иеы]мани[йяе]", re.IGNORECASE),
+    re.compile(r"(\d+)\s*раз.*от[жш]", re.IGNORECASE),
     re.compile(r"pushups?\s*(\d+)", re.IGNORECASE),
     re.compile(r"(\d+)\s*pushups?", re.IGNORECASE),
     # Продажи
@@ -86,12 +86,16 @@ METRIC_PATTERNS = [
 ]
 
 PUSHUP_PATTERNS = [
-    re.compile(r"(\d+)\s*отжимани[йя]", re.IGNORECASE),
-    re.compile(r"отжимани[йя]\s*(\d+)", re.IGNORECASE),
-    re.compile(r"сделал.*?(\d+)\s*отжимани[йя]", re.IGNORECASE),
-    re.compile(r"(\d+)\s*раз.*отжа", re.IGNORECASE),
+    # Стандартные + Whisper-ошибки (отшимания, отжемания, отжимания)
+    re.compile(r"(\d+)\s*от[жш][иеы]мани[йяе]", re.IGNORECASE),
+    re.compile(r"от[жш][иеы]мани[йяе]\s*(\d+)", re.IGNORECASE),
+    re.compile(r"сделал.*?(\d+)\s*от[жш][иеы]мани[йяе]", re.IGNORECASE),
+    re.compile(r"(\d+)\s*раз.*от[жш]", re.IGNORECASE),
     re.compile(r"pushups?\s*(\d+)", re.IGNORECASE),
     re.compile(r"(\d+)\s*pushups?", re.IGNORECASE),
+    # "отжался 50 раз"
+    re.compile(r"от[жш]ался\s*(\d+)", re.IGNORECASE),
+    re.compile(r"(\d+)\s*раз\s*от[жш]ался", re.IGNORECASE),
 ]
 
 
@@ -122,7 +126,7 @@ VOICE_COMMAND_PATTERNS: list[tuple[re.Pattern, str, dict]] = [
     (re.compile(r"(английский\s+)?тест|проверь\s+(мои\s+)?(знани[ея]|слова)|протестируй", re.IGNORECASE), "english_test", {}),
     # Выполнил задачу (по тексту) — исключить отжимания, продажи, метрики
     (re.compile(r"(выполнил|завершил|закрыл|готово)\s+(.+)", re.IGNORECASE), "done_task", {}),
-    (re.compile(r"сделал\s+(?!.*(?:отжимани|pushup|продаж|подход))(.+)", re.IGNORECASE), "done_task", {}),
+    (re.compile(r"сделал\s+(?!.*(?:от[жш][иеы]мани|pushup|продаж|подход))(.+)", re.IGNORECASE), "done_task", {}),
 ]
 
 
