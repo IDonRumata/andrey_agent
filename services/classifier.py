@@ -120,8 +120,9 @@ VOICE_COMMAND_PATTERNS: list[tuple[re.Pattern, str, dict]] = [
     (re.compile(r"слова\s+(на\s+)?повторени[ея]|что\s+повторять|повтори\s+слова|английские\s+слова", re.IGNORECASE), "english_review", {}),
     # English — тест
     (re.compile(r"(английский\s+)?тест|проверь\s+(мои\s+)?(знани[ея]|слова)|протестируй", re.IGNORECASE), "english_test", {}),
-    # Выполнил задачу (по тексту)
-    (re.compile(r"(выполнил|сделал|завершил|закрыл|готово)\s+(.+)", re.IGNORECASE), "done_task", {}),
+    # Выполнил задачу (по тексту) — исключить отжимания, продажи, метрики
+    (re.compile(r"(выполнил|завершил|закрыл|готово)\s+(.+)", re.IGNORECASE), "done_task", {}),
+    (re.compile(r"сделал\s+(?!.*(?:отжимани|pushup|продаж|подход))(.+)", re.IGNORECASE), "done_task", {}),
 ]
 
 
@@ -204,25 +205,25 @@ def classify_local(text: str) -> dict | None:
     if not text:
         return None
 
-    # 0a. Голосовые команды (show_tasks, portfolio, briefing и т.д.)
-    voice_cmd = detect_voice_command(text)
-    if voice_cmd:
-        return voice_cmd
-
-    # 0b. English — изучение языка
-    if detect_english(text):
-        return {
-            "type": "english",
-            "text": text,
-            "source": "local",
-        }
-
-    # 0c. Метрики — отжимания, продажи
+    # 0a. Метрики — отжимания (ПЕРЕД голосовыми командами, чтобы "сделал отжимания" не путалось с done_task)
     pushups = detect_pushups(text)
     if pushups is not None:
         return {
             "type": "pushups",
             "value": pushups,
+            "text": text,
+            "source": "local",
+        }
+
+    # 0b. Голосовые команды (show_tasks, portfolio, briefing и т.д.)
+    voice_cmd = detect_voice_command(text)
+    if voice_cmd:
+        return voice_cmd
+
+    # 0c. English — изучение языка
+    if detect_english(text):
+        return {
+            "type": "english",
             "text": text,
             "source": "local",
         }

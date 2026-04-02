@@ -217,6 +217,10 @@ async def _dispatch_intent(
         count = data.get("value", 0)
         today = date.today().isoformat()
         await db.save_metrics(today, pushups=count)
+        await db.log_action("add", "metrics", 0, f"pushups={count}")
+        # Сохранить в историю чата (чтобы агент помнил контекст)
+        await db.save_message("user", raw_text)
+        await db.save_message("assistant", f"Записал {count} отжиманий")
         from handlers.metrics import _challenge_day
         day_num = _challenge_day()
         day_str = f" (день {day_num})" if day_num else ""
@@ -261,16 +265,22 @@ async def _dispatch_intent(
 
     # ── Задача ──
     if intent == "task":
-        task_id = await db.add_task(text or raw_text, project)
+        task_text = text or raw_text
+        task_id = await db.add_task(task_text, project)
         await db.log_action("add", "tasks", task_id)
-        await message.answer(f"{prefix}✅ Задача #{task_id}: {text or raw_text}", parse_mode="Markdown")
+        await db.save_message("user", raw_text)
+        await db.save_message("assistant", f"Задача #{task_id}: {task_text}")
+        await message.answer(f"{prefix}✅ Задача #{task_id}: {task_text}", parse_mode="Markdown")
         return True
 
     # ── Идея ──
     if intent == "idea":
-        idea_id = await db.add_idea(text or raw_text, project)
+        idea_text = text or raw_text
+        idea_id = await db.add_idea(idea_text, project)
         await db.log_action("add", "ideas", idea_id)
-        await message.answer(f"{prefix}💡 Идея #{idea_id}: {text or raw_text}", parse_mode="Markdown")
+        await db.save_message("user", raw_text)
+        await db.save_message("assistant", f"Идея #{idea_id}: {idea_text}")
+        await message.answer(f"{prefix}💡 Идея #{idea_id}: {idea_text}", parse_mode="Markdown")
         return True
 
     # ── Вопрос — сразу Sonnet ──
