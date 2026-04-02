@@ -93,12 +93,14 @@ async def route_message(message: types.Message, text: str, is_voice: bool = Fals
         # Задача
         if msg_type == "task":
             task_id = await db.add_task(local["text"], local.get("project"))
+            await db.log_action("add", "tasks", task_id)
             await message.answer(f"{prefix}✅ Задача #{task_id}: {local['text']}", parse_mode="Markdown")
             return
 
         # Идея
         if msg_type == "idea":
             idea_id = await db.add_idea(local["text"], local.get("project"))
+            await db.log_action("add", "ideas", idea_id)
             await message.answer(f"{prefix}💡 Идея #{idea_id}: {local['text']}", parse_mode="Markdown")
             return
 
@@ -116,9 +118,11 @@ async def route_message(message: types.Message, text: str, is_voice: bool = Fals
 
     if msg_type == "task":
         task_id = await db.add_task(summary, project)
+        await db.log_action("add", "tasks", task_id)
         await message.answer(f"{prefix}✅ Задача #{task_id}: {summary}", parse_mode="Markdown")
     elif msg_type == "idea":
         idea_id = await db.add_idea(summary, project)
+        await db.log_action("add", "ideas", idea_id)
         await message.answer(f"{prefix}💡 Идея #{idea_id}: {summary}", parse_mode="Markdown")
     else:
         # Вопрос или заметка — Claude Sonnet отвечает

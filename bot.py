@@ -43,7 +43,27 @@ class AccessMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 
+class RateLimitMiddleware(BaseMiddleware):
+    """Защита от спама: макс 30 сообщений в минуту."""
+    def __init__(self):
+        self._timestamps: list[float] = []
+        self._limit = 30
+        self._window = 60.0
+
+    async def __call__(self, handler, event, data):
+        import time
+        now = time.time()
+        self._timestamps = [t for t in self._timestamps if now - t < self._window]
+        if len(self._timestamps) >= self._limit:
+            if isinstance(event, types.Message):
+                await event.answer("⏳ Слишком много сообщений. Подожди минуту.")
+            return
+        self._timestamps.append(now)
+        return await handler(event, data)
+
+
 dp.message.middleware(AccessMiddleware())
+dp.message.middleware(RateLimitMiddleware())
 
 
 # --- Базовые команды ---
@@ -75,8 +95,11 @@ async def cmd_start(message: types.Message):
         "/buy актив кол-во [цена] [биржа]\n"
         "/sell ID [цена] — зафиксировать продажу\n"
         "/portfolio — портфель с текущими ценами\n"
-        "/pnl — реализованная прибыль\n\n"
-        "Или просто напиши/надиктуй — я пойму.",
+        "/pnl — реализованная прибыль\n"
+        "/export — выгрузить в CSV\n\n"
+        "📅 /digest — сводка за сегодня (авто 21:00)\n"
+        "↩️ /undo — отменить последнее действие\n\n"
+        "Или просто напиши/надиктуй/скинь фото — я пойму.",
         parse_mode="Markdown",
     )
 
@@ -98,7 +121,7 @@ async def main():
     logger.info("Проекты загружены в классификатор")
 
     # Импорт и подключение роутеров handlers
-    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, chat, voice, portfolio, photo
+    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, digest, chat, voice, portfolio, photo, undo
     dp.include_router(tasks.router)
     dp.include_router(ideas.router)
     dp.include_router(content.router)
@@ -107,8 +130,10 @@ async def main():
     dp.include_router(search.router)
     dp.include_router(cost.router)
     dp.include_router(briefing.router)
+    dp.include_router(digest.router)
     dp.include_router(portfolio.router)
     dp.include_router(photo.router)
+    dp.include_router(undo.router)
     dp.include_router(voice.router)
     dp.include_router(chat.router)  # chat последним - ловит всё остальное
 
@@ -140,6 +165,9 @@ async def main():
         BotCommand(command="sell",      description="Продал актив: /sell ID [цена]"),
         BotCommand(command="portfolio", description="Мой портфель с текущими ценами"),
         BotCommand(command="pnl",       description="Реализованная прибыль по сделкам"),
+        BotCommand(command="digest",    description="Сводка за сегодня"),
+        BotCommand(command="undo",      description="Отменить последнее действие"),
+        BotCommand(command="export",    description="Экспорт портфеля в CSV"),
         BotCommand(command="help",      description="Список всех команд"),
     ], scope=BotCommandScopeDefault())
     logger.info("Меню команд установлено")

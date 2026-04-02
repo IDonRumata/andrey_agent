@@ -8,7 +8,7 @@
 
 set -e
 
-APP_DIR="/home/ubuntu/andrey_agent"
+APP_DIR="${ANDREY_AGENT_DIR:-/root/andrey_agent}"
 DB_PATH="$APP_DIR/data/agent.db"
 BACKUP_DIR="$APP_DIR/data/backups"
 DATE=$(date +%Y-%m-%d_%H%M)

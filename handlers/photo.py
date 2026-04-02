@@ -10,7 +10,7 @@ import json
 import logging
 
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from services.claude_api import ask_claude_vision
 import database as db
@@ -104,7 +104,7 @@ async def handle_photo(message: Message):
         await message.answer(text)
         return
 
-    # ─── Сделка ───
+    # ─── Сделка — показать с кнопками подтверждения ───
     if result_type == "trade":
         direction = parsed.get("direction", "buy")
         asset = (parsed.get("asset") or "").upper()
@@ -125,52 +125,83 @@ async def handle_photo(message: Message):
             return
 
         asset_type = detect_asset_type(asset)
-        conf_note = "" if confidence == "high" else f"\n⚠️ Уверенность: {confidence} — проверь данные"
+        conf_note = "" if confidence == "high" else f"\n⚠️ Уверенность: {confidence}"
+        total = float(quantity) * float(price)
+        dir_text = "Покупка" if direction == "buy" else "Продажа"
 
-        if direction == "buy":
-            entry_id = await db.add_portfolio_entry(
-                asset=asset,
-                asset_type=asset_type,
-                exchange=exchange,
-                quantity=float(quantity),
-                buy_price=float(price),
-                currency=currency,
-                buy_date=date,
-            )
-            total = float(quantity) * float(price)
-            await message.answer(
-                f"✅ Покупка #{entry_id} сохранена в портфель{conf_note}\n\n"
-                f"📌 {asset} ({asset_type})\n"
-                f"Кол-во: {_fmt(float(quantity))}\n"
-                f"Цена: {_fmt(float(price))} {currency}\n"
-                f"Сумма: {_fmt(total)} {currency}\n"
-                f"Биржа: {exchange or '—'}\n"
-                f"Дата: {date}\n\n"
-                f"Проверь: /portfolio"
+        # Данные для callback
+        cb_data = f"trade:{direction}:{asset}:{quantity}:{price}:{exchange}:{date}:{currency}:{asset_type}"
+        # Telegram callback_data max 64 bytes — обрезаем если надо
+        if len(cb_data) > 64:
+            cb_data = cb_data[:64]
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Сохранить", callback_data=cb_data),
+                InlineKeyboardButton(text="❌ Не надо", callback_data="trade:cancel"),
+            ]
+        ])
+
+        await message.answer(
+            f"📸 Распознана сделка:{conf_note}\n\n"
+            f"📌 {dir_text}: {asset} ({asset_type})\n"
+            f"Кол-во: {_fmt(float(quantity))}\n"
+            f"Цена: {_fmt(float(price))} {currency}\n"
+            f"Сумма: {_fmt(total)} {currency}\n"
+            f"Биржа: {exchange or '—'}\n"
+            f"Дата: {date}\n\n"
+            f"Сохранить в портфель?",
+            reply_markup=keyboard,
+        )
+
+
+@router.callback_query(F.data.startswith("trade:"))
+async def handle_trade_callback(callback: CallbackQuery):
+    """Обработка кнопок подтверждения сделки."""
+    data = callback.data
+
+    if data == "trade:cancel":
+        await callback.message.edit_text(
+            callback.message.text + "\n\n❌ Отменено.",
+        )
+        await callback.answer("Отменено")
+        return
+
+    # Парсим: trade:direction:asset:quantity:price:exchange:date:currency:asset_type
+    parts = data.split(":")
+    if len(parts) < 9:
+        await callback.answer("Ошибка данных")
+        return
+
+    _, direction, asset, quantity, price, exchange, date, currency, asset_type = parts[:9]
+    quantity = float(quantity)
+    price = float(price)
+
+    if direction == "buy":
+        entry_id = await db.add_portfolio_entry(
+            asset=asset, asset_type=asset_type, exchange=exchange,
+            quantity=quantity, buy_price=price, currency=currency, buy_date=date,
+        )
+        await db.log_action("add", "portfolio", entry_id)
+        await callback.message.edit_text(
+            callback.message.text + f"\n\n✅ Сохранено! Позиция #{entry_id}\n/portfolio",
+        )
+    elif direction == "sell":
+        positions = await db.get_portfolio()
+        matching = [p for p in positions if p["asset"] == asset]
+        if matching:
+            entry = matching[0]
+            await db.close_portfolio_entry(entry["id"], price, date)
+            buy_total = entry["quantity"] * entry["buy_price"]
+            sell_total = quantity * price
+            pnl = sell_total - buy_total
+            sign = "+" if pnl >= 0 else ""
+            await callback.message.edit_text(
+                callback.message.text + f"\n\n{'🟢' if pnl >= 0 else '🔴'} Продажа зафиксирована. P&L: {sign}{pnl:.2f} {currency}",
             )
         else:
-            # Продажа — ищем активную позицию
-            positions = await db.get_portfolio()
-            matching = [p for p in positions if p["asset"] == asset]
+            await callback.message.edit_text(
+                callback.message.text + f"\n\n⚠️ Нет активной позиции по {asset}",
+            )
 
-            if matching:
-                # Закрываем последнюю позицию по этому активу
-                entry = matching[0]
-                await db.close_portfolio_entry(entry["id"], float(price), date)
-                buy_total = entry["quantity"] * entry["buy_price"]
-                sell_total = float(quantity) * float(price)
-                pnl = sell_total - buy_total
-                sign = "+" if pnl >= 0 else ""
-                await message.answer(
-                    f"{'🟢' if pnl >= 0 else '🔴'} Продажа #{entry['id']} зафиксирована{conf_note}\n\n"
-                    f"📌 {asset} × {_fmt(float(quantity))}\n"
-                    f"Куплено: {_fmt(entry['buy_price'])} → Продано: {_fmt(float(price))} {currency}\n"
-                    f"P&L: {sign}{_fmt(pnl)} {currency}"
-                )
-            else:
-                await message.answer(
-                    f"Вижу продажу {asset}, но в портфеле нет активной позиции по этому активу.\n"
-                    f"Если нужно — добавь покупку: `/buy {asset} {quantity} ЦЕНА БИРЖА`",
-                    parse_mode="Markdown"
-                )
-
+    await callback.answer("Готово!")

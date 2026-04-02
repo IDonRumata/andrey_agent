@@ -99,6 +99,16 @@ async def init_db():
                 calls INTEGER DEFAULT 0
             );
 
+            -- Лог действий для /undo
+            CREATE TABLE IF NOT EXISTS action_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_type TEXT NOT NULL,
+                entity_table TEXT NOT NULL,
+                entity_id INTEGER NOT NULL,
+                data TEXT DEFAULT '',
+                created_at DATETIME DEFAULT (datetime('now'))
+            );
+
             -- Инвестиционный портфель
             CREATE TABLE IF NOT EXISTS portfolio (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -277,6 +287,10 @@ async def save_message(role: str, content: str):
             (role, content, datetime.now().isoformat()),
         )
         await db.commit()
+    # Авто-сжатие: если больше 30 сообщений, оставить 10
+    count = await get_chat_history_count()
+    if count > 30:
+        await compress_chat_history(keep_recent=10)
 
 
 async def get_chat_history(limit: int = 20) -> list[dict]:
@@ -559,6 +573,84 @@ async def get_portfolio_history() -> list[dict]:
         cursor = await db.execute(
             "SELECT * FROM portfolio WHERE status = 'sold' ORDER BY sell_date DESC"
         )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+# ---- Undo (лог действий) ----
+
+async def log_action(action_type: str, entity_table: str, entity_id: int, data: str = ""):
+    """Записать действие для /undo."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO action_log (action_type, entity_table, entity_id, data, created_at) VALUES (?, ?, ?, ?, ?)",
+            (action_type, entity_table, entity_id, data, datetime.now().isoformat()),
+        )
+        await db.commit()
+
+
+async def get_last_action() -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM action_log ORDER BY id DESC LIMIT 1")
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def delete_action_log(action_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM action_log WHERE id = ?", (action_id,))
+        await db.commit()
+
+
+async def delete_task(task_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        await db.commit()
+
+
+async def delete_portfolio_entry(entry_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM portfolio WHERE id = ?", (entry_id,))
+        await db.commit()
+
+
+async def reopen_task(task_id: int):
+    """Вернуть задачу в active из done."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE tasks SET status = 'active', done_at = NULL WHERE id = ?",
+            (task_id,),
+        )
+        await db.commit()
+
+
+# ---- Сжатие истории чата ----
+
+async def get_chat_history_count() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT COUNT(*) FROM chat_history")
+        row = await cursor.fetchone()
+        return row[0]
+
+
+async def compress_chat_history(keep_recent: int = 10):
+    """Удалить старые сообщения, оставив последние keep_recent."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM chat_history WHERE id NOT IN (SELECT id FROM chat_history ORDER BY id DESC LIMIT ?)",
+            (keep_recent,),
+        )
+        await db.commit()
+
+
+# ---- Экспорт портфеля ----
+
+async def get_all_portfolio() -> list[dict]:
+    """Все позиции для экспорта."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM portfolio ORDER BY buy_date DESC")
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 

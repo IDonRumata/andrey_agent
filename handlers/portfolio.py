@@ -113,6 +113,7 @@ async def cmd_buy(message: Message):
         currency=currency,
         buy_date=buy_date,
     )
+    await db.log_action("add", "portfolio", entry_id)
 
     total = quantity * buy_price
     await message.answer(
