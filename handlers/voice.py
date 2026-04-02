@@ -74,6 +74,14 @@ async def route_message(message: types.Message, text: str, is_voice: bool = Fals
         await message.answer(f"{prefix}{response}", parse_mode="Markdown")
 
 
+def _hashtag(project: str | None) -> str:
+    """Хэштег проекта для поиска в Telegram."""
+    if not project:
+        return ""
+    tag = project.replace(" ", "_").replace("-", "_")
+    return f"\n\n#{tag}"
+
+
 async def _dispatch_intent(
     message: types.Message,
     intent: str,
@@ -86,6 +94,7 @@ async def _dispatch_intent(
     """
     project = data.get("project")
     text = data.get("text", raw_text)
+    tag = _hashtag(project)
 
     # ── Показать задачи ──
     if intent == "show_tasks":
@@ -270,7 +279,7 @@ async def _dispatch_intent(
         await db.log_action("add", "tasks", task_id)
         await db.save_message("user", raw_text)
         await db.save_message("assistant", f"Задача #{task_id}: {task_text}")
-        await message.answer(f"{prefix}✅ Задача #{task_id}: {task_text}", parse_mode="Markdown")
+        await message.answer(f"{prefix}✅ Задача #{task_id}: {task_text}{tag}", parse_mode="Markdown")
         return True
 
     # ── Идея ──
@@ -280,7 +289,7 @@ async def _dispatch_intent(
         await db.log_action("add", "ideas", idea_id)
         await db.save_message("user", raw_text)
         await db.save_message("assistant", f"Идея #{idea_id}: {idea_text}")
-        await message.answer(f"{prefix}💡 Идея #{idea_id}: {idea_text}", parse_mode="Markdown")
+        await message.answer(f"{prefix}💡 Идея #{idea_id}: {idea_text}{tag}", parse_mode="Markdown")
         return True
 
     # ── Вопрос — сразу Sonnet ──
@@ -288,7 +297,7 @@ async def _dispatch_intent(
         await db.save_message("user", raw_text)
         response = await ask_claude(raw_text, tier="sonnet", use_history=True)
         await db.save_message("assistant", response)
-        await message.answer(f"{prefix}{response}", parse_mode="Markdown")
+        await message.answer(f"{prefix}{response}{tag}", parse_mode="Markdown")
         return True
 
     return False  # не обработано
@@ -310,7 +319,8 @@ async def _save_to_project(message: types.Message, raw_text: str, local: dict, p
     entry_text = structured.get("text", local.get("text", raw_text))
 
     await db.add_project_entry(project["id"], entry_type, raw_text, entry_text)
+    tag = _hashtag(project["name"])
     await message.answer(
-        f"{prefix}📁 [{entry_type.upper()}] → *{project['name']}*: {entry_text}",
+        f"{prefix}📁 [{entry_type.upper()}] → *{project['name']}*: {entry_text}{tag}",
         parse_mode="Markdown",
     )
