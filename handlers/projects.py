@@ -124,6 +124,41 @@ async def cmd_summary(message: types.Message):
     await message.answer(f"📝 Резюме проекта **{name}**:\n\n{response}", parse_mode="Markdown")
 
 
+async def _project_summary(message, project_name: str, prefix: str = ""):
+    """Показать сводку по проекту — вызывается из voice router."""
+    project = await db.get_project_by_name(project_name)
+    if not project:
+        # Попробовать частичное совпадение
+        projects = await db.get_projects()
+        matches = [p for p in projects if project_name.lower() in p["name"].lower()]
+        if matches:
+            project = matches[0]
+        else:
+            await message.answer(f"{prefix}Проект «{project_name}» не найден. Смотри /projects")
+            return
+
+    entries = await db.get_project_entries(project["id"])
+    tasks = await db.get_active_tasks()
+    proj_tasks = [t for t in tasks if t.get("project", "").lower() == project["name"].lower()]
+
+    lines = [f"{prefix}📁 *{project['name']}*\n"]
+    lines.append(f"Записей: {len(entries)} | Задач активных: {len(proj_tasks)}")
+
+    if proj_tasks:
+        lines.append("\nАктивные задачи:")
+        for t in proj_tasks[:5]:
+            lines.append(f"  `{t['id']}` {t['text']}")
+
+    if entries:
+        recent = entries[-3:]
+        lines.append("\nПоследние записи:")
+        for e in recent:
+            lines.append(f"  [{e['type']}] {e['structured'][:80] if e['structured'] else e['raw_text'][:80]}")
+
+    lines.append(f"\nПодробнее: /project {project['name']} | Резюме: /summary {project['name']}")
+    await message.answer("\n".join(lines), parse_mode="Markdown")
+
+
 @router.message(Command("archive"))
 async def cmd_archive_project(message: types.Message):
     """Архивировать проект."""

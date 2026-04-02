@@ -95,6 +95,52 @@ PUSHUP_PATTERNS = [
 ]
 
 
+# ── Голосовые команды → интенты (без вызова Claude) ──
+
+VOICE_COMMAND_PATTERNS: list[tuple[re.Pattern, str, dict]] = [
+    # Показать задачи
+    (re.compile(r"покажи\s+(мои\s+)?задачи|список\s+дел|что\s+(у\s+меня\s+)?(по\s+задачам|нужно\s+сделать)|мои\s+задачи", re.IGNORECASE), "show_tasks", {}),
+    # Показать идеи
+    (re.compile(r"покажи\s+(мои\s+)?идеи|список\s+идей|мои\s+идеи", re.IGNORECASE), "show_ideas", {}),
+    # Показать проекты
+    (re.compile(r"покажи\s+(мои\s+)?проекты|список\s+проектов|мои\s+проекты|статус\s+проектов", re.IGNORECASE), "show_projects", {}),
+    # Портфель
+    (re.compile(r"покажи\s+(мой\s+)?портфель|что\s+(у\s+меня\s+)?в\s+портфеле|мои\s+(акции|крипта|инвестиции)|состояние\s+портфеля", re.IGNORECASE), "portfolio", {}),
+    # Прибыль
+    (re.compile(r"(моя\s+)?(прибыль|убыток|доходность|p.?n.?l|результат\s+по\s+сделкам)", re.IGNORECASE), "pnl", {}),
+    # Брифинг
+    (re.compile(r"(сделай|дай|покажи)?\s*брифинг|отчёт\s+за\s+неделю|недельный\s+отчёт", re.IGNORECASE), "briefing", {}),
+    # Дайджест / сводка дня
+    (re.compile(r"(сводка|дайджест|итоги)\s+(за\s+)?(сегодня|день)|что\s+сегодня\s+сделал", re.IGNORECASE), "digest", {}),
+    # Расходы на AI
+    (re.compile(r"сколько\s+(потратил|стоит)\s+(на\s+)?(ии|ai|клода|claude|искусственный\s+интеллект)|расходы\s+на\s+(ии|ai)", re.IGNORECASE), "cost", {}),
+    # Статистика / метрики
+    (re.compile(r"(покажи\s+)?(статистику|метрики|показатели)(\s+за\s+(неделю|месяц))?", re.IGNORECASE), "metrics", {}),
+    # English — повторение
+    (re.compile(r"слова\s+(на\s+)?повторени[ея]|что\s+повторять|повтори\s+слова|английские\s+слова", re.IGNORECASE), "english_review", {}),
+    # English — тест
+    (re.compile(r"(английский\s+)?тест|проверь\s+(мои\s+)?(знани[ея]|слова)|протестируй", re.IGNORECASE), "english_test", {}),
+    # Выполнил задачу (по тексту)
+    (re.compile(r"(выполнил|сделал|завершил|закрыл|готово)\s+(.+)", re.IGNORECASE), "done_task", {}),
+]
+
+
+def detect_voice_command(text: str) -> dict | None:
+    """Распознать голосовую команду без Claude."""
+    for pattern, intent, extra in VOICE_COMMAND_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            result = {"type": intent, "text": text, "source": "local"}
+            result.update(extra)
+            # Для done_task — извлечь текст задачи
+            if intent == "done_task" and m.lastindex and m.lastindex >= 2:
+                result["task_text"] = m.group(2).strip()
+            # Определить проект если упомянут
+            result["project"] = detect_project(text)
+            return result
+    return None
+
+
 ENGLISH_KEYWORDS = [
     "английск", "english", "по-английски",
     "запомни слово", "новое слово", "добавь слово",
@@ -158,7 +204,12 @@ def classify_local(text: str) -> dict | None:
     if not text:
         return None
 
-    # 0a. English — изучение языка
+    # 0a. Голосовые команды (show_tasks, portfolio, briefing и т.д.)
+    voice_cmd = detect_voice_command(text)
+    if voice_cmd:
+        return voice_cmd
+
+    # 0b. English — изучение языка
     if detect_english(text):
         return {
             "type": "english",
@@ -166,7 +217,7 @@ def classify_local(text: str) -> dict | None:
             "source": "local",
         }
 
-    # 0b. Метрики — отжимания, продажи
+    # 0c. Метрики — отжимания, продажи
     pushups = detect_pushups(text)
     if pushups is not None:
         return {

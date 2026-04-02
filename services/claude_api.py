@@ -117,12 +117,44 @@ async def ask_claude(
 
 # --- Классификация через Haiku (дешёвая) ---
 
-CLASSIFY_SYSTEM = (
-    "Классифицируй сообщение. Ответь ТОЛЬКО JSON:\n"
-    '{"type":"task|idea|note|question","project":"grafin|kronon|realtor|null","text":"краткая суть"}\n'
-    "Проекты: grafin (курс инвестиций), kronon (Forex-робот), realtor (сайт риэлторов).\n"
-    "Если проект не очевиден — null."
-)
+CLASSIFY_SYSTEM = """Ты роутер сообщений персонального ассистента Андрея (дальнобойщик, инвестор, Беларусь).
+Определи intent и верни ТОЛЬКО JSON без markdown.
+
+INTENTS:
+- task        → запись задачи/напоминания
+- idea        → идея, мысль
+- question    → вопрос, нужен ответ
+- show_tasks  → показать задачи ("покажи задачи", "что у меня", "список дел")
+- show_ideas  → показать идеи
+- show_projects → показать проекты
+- done_task   → отметить задачу выполненной ("выполнил", "готово", "закрыть задачу")
+- portfolio   → показать портфель ("что в портфеле", "мои акции", "инвестиции")
+- buy_asset   → купить актив ("купил BTC", "добавь в портфель")
+- pnl         → прибыль/убыток ("какая прибыль", "P&L", "доходность")
+- english     → английский язык ("слова", "повторение", "грамматика", "как переводится")
+- metrics     → метрики/статистика ("статистика", "метрики", "продажи за неделю")
+- briefing    → недельный брифинг ("брифинг", "отчёт за неделю")
+- digest      → сводка за день ("сводка", "что сегодня", "итоги дня")
+- cost        → расходы на AI ("сколько потратил", "расходы")
+- search      → поиск в интернете ("найди", "поищи", "что такое")
+- note        → заметка в проект (с упоминанием проекта)
+- chat        → разговор, совет, обсуждение (всё остальное)
+
+Проекты: grafin, kronon, realtor, english, скринер, транскрибатор.
+
+Примеры:
+"покажи мои задачи" → {"intent":"show_tasks","project":null,"text":""}
+"задача: позвонить Марине" → {"intent":"task","project":null,"text":"позвонить Марине"}
+"выполнил звонок партнёру" → {"intent":"done_task","project":null,"text":"звонок партнёру"}
+"купил BTC 0.001 по 69000 на Bybit" → {"intent":"buy_asset","text":"BTC 0.001 69000 Bybit"}
+"что у меня в портфеле" → {"intent":"portfolio","project":null,"text":""}
+"слова на повторение" → {"intent":"english","action":"review","text":""}
+"как дела у Графина" → {"intent":"show_projects","project":"grafin","text":""}
+"идея для Графина: сделать вебинар" → {"intent":"note","project":"grafin","text":"идея: сделать вебинар"}
+"найди курс биткоина" → {"intent":"search","text":"курс биткоина"}
+"сколько потратил на ИИ" → {"intent":"cost","text":""}
+
+Верни ТОЛЬКО JSON, одна строка."""
 
 
 async def classify_message(text: str) -> dict:
@@ -133,12 +165,13 @@ async def classify_message(text: str) -> dict:
         tier="haiku",
         use_history=False,
         use_cache=True,
-        cache_ttl_hours=720,  # 30 дней — классификация стабильна
+        cache_ttl_hours=24,  # 24ч — intents могут меняться
     )
     try:
-        return json.loads(response)
+        clean = response.strip().strip("`").replace("```json", "").replace("```", "").strip()
+        return json.loads(clean)
     except json.JSONDecodeError:
-        return {"type": "note", "project": None, "text": text}
+        return {"intent": "chat", "project": None, "text": text}
 
 
 # --- Структурирование записи для проекта (Haiku) ---

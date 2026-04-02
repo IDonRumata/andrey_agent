@@ -92,6 +92,27 @@ async def cmd_clear(message: types.Message):
     await message.answer(f"🗃 Архивировано: {archived} задач")
 
 
+async def _format_tasks(tasks: list) -> str:
+    """Форматировать список задач для вывода (используется из voice router)."""
+    by_project: dict[str, list] = {}
+    for t in tasks:
+        proj = t["project"] or "без проекта"
+        by_project.setdefault(proj, []).append(t)
+
+    lines = ["📋 **Активные задачи:**\n"]
+    total = 0
+    for project, items in by_project.items():
+        lines.append(f"**{project.upper()}** ({len(items)})")
+        for t in items:
+            age = _task_age(t["created_at"])
+            age_str = f" ⚠️ {age}д" if age >= 7 else ""
+            lines.append(f"  `{t['id']}` {t['text']}{age_str}")
+            total += 1
+        lines.append("")
+    lines.append(f"Всего: {total} | Закрыть: /done [ID или текст]")
+    return "\n".join(lines)
+
+
 def _task_age(created_at: str | None) -> int:
     """Возраст задачи в днях."""
     if not created_at:
