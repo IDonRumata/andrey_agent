@@ -95,6 +95,20 @@ PUSHUP_PATTERNS = [
 ]
 
 
+ENGLISH_KEYWORDS = [
+    "английск", "english", "по-английски",
+    "запомни слово", "новое слово", "добавь слово",
+    "запомни фразу", "как переводится", "что значит по-английски",
+    "grammar", "грамматик", "phrasal verb", "фразовый глагол",
+]
+
+
+def detect_english(text: str) -> bool:
+    """Определить — сообщение про изучение английского."""
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in ENGLISH_KEYWORDS)
+
+
 def detect_pushups(text: str) -> int | None:
     """Извлечь число отжиманий из текста."""
     for pat in PUSHUP_PATTERNS:
@@ -144,7 +158,15 @@ def classify_local(text: str) -> dict | None:
     if not text:
         return None
 
-    # 0. Метрики — отжимания, продажи
+    # 0a. English — изучение языка
+    if detect_english(text):
+        return {
+            "type": "english",
+            "text": text,
+            "source": "local",
+        }
+
+    # 0b. Метрики — отжимания, продажи
     pushups = detect_pushups(text)
     if pushups is not None:
         return {

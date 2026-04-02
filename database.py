@@ -99,6 +99,16 @@ async def init_db():
                 calls INTEGER DEFAULT 0
             );
 
+            -- English vocabulary (spaced repetition)
+            CREATE TABLE IF NOT EXISTS english_vocab (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word TEXT NOT NULL,
+                translation TEXT NOT NULL,
+                review_count INTEGER DEFAULT 0,
+                next_review TEXT DEFAULT (date('now')),
+                created_at DATETIME DEFAULT (datetime('now'))
+            );
+
             -- Лог действий для /undo
             CREATE TABLE IF NOT EXISTS action_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -653,6 +663,112 @@ async def get_all_portfolio() -> list[dict]:
         cursor = await db.execute("SELECT * FROM portfolio ORDER BY buy_date DESC")
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+
+# ---- English Vocabulary ----
+
+async def add_english_vocab(word: str, translation: str) -> int:
+    """Добавить слово. Если уже есть — обновить перевод."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        existing = await db.execute("SELECT id FROM english_vocab WHERE word = ?", (word.lower(),))
+        row = await existing.fetchone()
+        if row:
+            await db.execute(
+                "UPDATE english_vocab SET translation = ?, next_review = date('now') WHERE id = ?",
+                (translation, row[0]),
+            )
+            await db.commit()
+            return row[0]
+        cursor = await db.execute(
+            "INSERT INTO english_vocab (word, translation, next_review) VALUES (?, ?, date('now'))",
+            (word.lower(), translation),
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def find_english_vocab(word: str) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM english_vocab WHERE word = ?", (word.lower(),)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def get_english_vocab_for_review(limit: int = 10) -> list[dict]:
+    """Слова у которых next_review <= сегодня."""
+    today = date.today().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM english_vocab WHERE next_review <= ? ORDER BY next_review LIMIT ?",
+            (today, limit),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def get_all_english_vocab(limit: int = 100) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM english_vocab ORDER BY created_at DESC LIMIT ?", (limit,)
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def mark_english_vocab_reviewed(vocab_id: int):
+    """Обновить дату следующего повторения по spaced repetition."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT review_count FROM english_vocab WHERE id = ?", (vocab_id,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return
+        count = (row[0] or 0) + 1
+        # Интервалы: 1, 3, 7, 14, 30, 60 дней
+        intervals = [1, 3, 7, 14, 30, 60]
+        days = intervals[min(count - 1, len(intervals) - 1)]
+        next_rev = (date.today() + timedelta(days=days)).isoformat()
+        await db.execute(
+            "UPDATE english_vocab SET review_count = ?, next_review = ? WHERE id = ?",
+            (count, next_rev, vocab_id),
+        )
+        await db.commit()
+
+
+async def get_english_stats() -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        today = date.today().isoformat()
+        vocab_count = (await (await db.execute("SELECT COUNT(*) FROM english_vocab")).fetchone())[0]
+        review_due = (await (await db.execute(
+            "SELECT COUNT(*) FROM english_vocab WHERE next_review <= ?", (today,)
+        )).fetchone())[0]
+        total_reviews = (await (await db.execute(
+            "SELECT COALESCE(SUM(review_count), 0) FROM english_vocab"
+        )).fetchone())[0]
+        # Фразы — из project_entries
+        db.row_factory = aiosqlite.Row
+        project = await (await db.execute(
+            "SELECT id FROM projects WHERE LOWER(name) = 'english'"
+        )).fetchone()
+        phrases_count = 0
+        if project:
+            phrases_count = (await (await db.execute(
+                "SELECT COUNT(*) FROM project_entries WHERE project_id = ? AND type = 'phrase'",
+                (project["id"],),
+            )).fetchone())[0]
+
+        return {
+            "vocab_count": vocab_count,
+            "review_due": review_due,
+            "total_reviews": total_reviews,
+            "phrases_count": phrases_count,
+        }
 
 
 async def get_total_cost(days: int = 30) -> float:

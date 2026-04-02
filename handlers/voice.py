@@ -64,6 +64,12 @@ async def route_message(message: types.Message, text: str, is_voice: bool = Fals
     if local and local["source"] == "local":
         msg_type = local["type"]
 
+        # English — изучение языка
+        if msg_type == "english":
+            from handlers.english import handle_english_voice
+            await handle_english_voice(message, local["text"], prefix)
+            return
+
         # Отжимания / метрики
         if msg_type == "pushups":
             from datetime import date

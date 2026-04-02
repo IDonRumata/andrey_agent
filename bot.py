@@ -121,7 +121,7 @@ async def main():
     logger.info("Проекты загружены в классификатор")
 
     # Импорт и подключение роутеров handlers
-    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, digest, chat, voice, portfolio, photo, undo
+    from handlers import tasks, ideas, content, metrics, projects, search, cost, briefing, digest, chat, voice, portfolio, photo, undo, english
     dp.include_router(tasks.router)
     dp.include_router(ideas.router)
     dp.include_router(content.router)
@@ -134,6 +134,7 @@ async def main():
     dp.include_router(portfolio.router)
     dp.include_router(photo.router)
     dp.include_router(undo.router)
+    dp.include_router(english.router)
     dp.include_router(voice.router)
     dp.include_router(chat.router)  # chat последним - ловит всё остальное
 
@@ -168,6 +169,11 @@ async def main():
         BotCommand(command="digest",    description="Сводка за сегодня"),
         BotCommand(command="undo",      description="Отменить последнее действие"),
         BotCommand(command="export",    description="Экспорт портфеля в CSV"),
+        BotCommand(command="en",        description="English A1→B1 — меню"),
+        BotCommand(command="vocab",     description="Словарь: /vocab word — перевод"),
+        BotCommand(command="enreview",  description="Слова на повторение"),
+        BotCommand(command="entest",    description="Мини-тест по словам"),
+        BotCommand(command="engram",    description="Грамматика: /engram present perfect"),
         BotCommand(command="help",      description="Список всех команд"),
     ], scope=BotCommandScopeDefault())
     logger.info("Меню команд установлено")
