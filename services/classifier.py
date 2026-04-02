@@ -67,6 +67,43 @@ SEARCH_PATTERNS = [
     re.compile(r"^подбери\s+", re.IGNORECASE),
 ]
 
+# Паттерны для метрик и физических упражнений
+METRIC_PATTERNS = [
+    # Отжимания
+    re.compile(r"(\d+)\s*отжимани[йя]", re.IGNORECASE),
+    re.compile(r"отжимани[йя]\s*(\d+)", re.IGNORECASE),
+    re.compile(r"сделал.*?(\d+)\s*отжимани[йя]", re.IGNORECASE),
+    re.compile(r"(\d+)\s*раз.*отжа", re.IGNORECASE),
+    re.compile(r"pushups?\s*(\d+)", re.IGNORECASE),
+    re.compile(r"(\d+)\s*pushups?", re.IGNORECASE),
+    # Продажи
+    re.compile(r"(\d+)\s*продаж[аиейу]", re.IGNORECASE),
+    re.compile(r"продаж[аиейу]\s*(\d+)", re.IGNORECASE),
+    re.compile(r"продал\s+(\d+)", re.IGNORECASE),
+    # Подписчики
+    re.compile(r"(\d+)\s*подписчик", re.IGNORECASE),
+    re.compile(r"подписчик\w*\s*(\d+)", re.IGNORECASE),
+]
+
+PUSHUP_PATTERNS = [
+    re.compile(r"(\d+)\s*отжимани[йя]", re.IGNORECASE),
+    re.compile(r"отжимани[йя]\s*(\d+)", re.IGNORECASE),
+    re.compile(r"сделал.*?(\d+)\s*отжимани[йя]", re.IGNORECASE),
+    re.compile(r"(\d+)\s*раз.*отжа", re.IGNORECASE),
+    re.compile(r"pushups?\s*(\d+)", re.IGNORECASE),
+    re.compile(r"(\d+)\s*pushups?", re.IGNORECASE),
+]
+
+
+def detect_pushups(text: str) -> int | None:
+    """Извлечь число отжиманий из текста."""
+    for pat in PUSHUP_PATTERNS:
+        m = pat.search(text)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 # Паттерны, которые точно НЕ задачи/идеи — вопросы для Claude
 QUESTION_PATTERNS = [
     re.compile(r"^(как|что|почему|зачем|когда|где|кто|сколько)\b", re.IGNORECASE),
@@ -106,6 +143,16 @@ def classify_local(text: str) -> dict | None:
     text = text.strip()
     if not text:
         return None
+
+    # 0. Метрики — отжимания, продажи
+    pushups = detect_pushups(text)
+    if pushups is not None:
+        return {
+            "type": "pushups",
+            "value": pushups,
+            "text": text,
+            "source": "local",
+        }
 
     # 1. Привязка к проекту: "по проекту X — ..."
     m = PROJECT_PATTERN.match(text)

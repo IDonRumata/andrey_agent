@@ -64,6 +64,19 @@ async def route_message(message: types.Message, text: str, is_voice: bool = Fals
     if local and local["source"] == "local":
         msg_type = local["type"]
 
+        # Отжимания / метрики
+        if msg_type == "pushups":
+            from datetime import date
+            count = local["value"]
+            today = date.today().isoformat()
+            await db.save_metrics(today, pushups=count)
+            # День челленджа
+            from handlers.metrics import _challenge_day
+            day_num = _challenge_day()
+            day_str = f" (день {day_num})" if day_num else ""
+            await message.answer(f"{prefix}💪 {count} отжиманий записано{day_str}!", parse_mode="Markdown")
+            return
+
         # Поиск
         if msg_type == "search":
             from handlers.search import assistant_search

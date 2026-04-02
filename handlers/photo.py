@@ -15,23 +15,23 @@ from aiogram.types import Message
 from services.claude_api import ask_claude_vision
 import database as db
 from services.prices import detect_asset_type
+import config
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-VISION_TRADE_SYSTEM = """Ты анализируешь скриншоты финансовых приложений для инвестора Андрея.
+VISION_SYSTEM = """Ты личный AI-ассистент Андрея. Он прислал фото в контексте беседы.
 
-Если на изображении видна сделка или транзакция (биржа, брокер, крипто-кошелёк):
-Верни ТОЛЬКО JSON без markdown:
-{"type":"trade","direction":"buy","asset":"BTC","quantity":0.001,"price":69608.0,"exchange":"Bybit","date":"2026-04-01","currency":"USD","confidence":"high"}
+ПРАВИЛА:
+1. Сначала посмотри КОНТЕКСТ БЕСЕДЫ — если разговор уже идёт на какую-то тему, фото относится к ней.
+2. Если фото — скриншот сделки/транзакции (биржа, крипто, брокер) И в контексте речь о покупке/продаже:
+   Верни JSON: {"type":"trade","direction":"buy","asset":"BTC","quantity":0.001,"price":69608.0,"exchange":"Bybit","date":"2026-04-01","currency":"USD","confidence":"high"}
+3. Если фото прислано КАК ИНФОРМАЦИЯ к текущей беседе (скриншот проекта, интерфейса, чата, квиза и т.д.):
+   Ответь текстом на русском — опиши что видишь и продолжи беседу в контексте.
+   НЕ пытайся найти сделку если речь не про покупку/продажу.
+4. Если несколько фото подряд — это иллюстрации к одной теме, не анализируй каждое как отдельную сущность.
 
-direction: buy или sell
-confidence: high (данные чёткие) / medium (частично видно) / low (предположение)
-
-Если это НЕ сделка (график, новость, фото, другое) — верни ТОЛЬКО JSON:
-{"type":"other","text":"описание что на фото и твой комментарий для Андрея"}
-
-Отвечай ТОЛЬКО JSON, без пояснений."""
+Отвечай кратко, конкретно, по делу. Как опытный бизнес-партнёр."""
 
 
 def _fmt(n: float) -> str:
@@ -42,7 +42,7 @@ def _fmt(n: float) -> str:
 
 @router.message(F.photo)
 async def handle_photo(message: Message):
-    """Получить фото, распознать через Claude Vision, сохранить если сделка."""
+    """Получить фото, распознать через Claude Vision с контекстом беседы."""
     await message.answer("🔍 Читаю фото...")
 
     # Скачать фото максимального размера
@@ -54,33 +54,55 @@ async def handle_photo(message: Message):
     buf.seek(0)
     image_b64 = base64.b64encode(buf.read()).decode()
 
+    # Подтянуть последние сообщения беседы для контекста
+    history = await db.get_chat_history(limit=6)
+    context_lines = []
+    for msg in history:
+        role = "Андрей" if msg["role"] == "user" else "Ассистент"
+        context_lines.append(f"{role}: {msg['content'][:200]}")
+    context_str = "\n".join(context_lines)
+
     # Подпись от пользователя (если есть)
     caption = message.caption or ""
-    prompt = f"Проанализируй это изображение.{' Контекст от пользователя: ' + caption if caption else ''}"
+    prompt = (
+        f"КОНТЕКСТ БЕСЕДЫ (последние сообщения):\n{context_str}\n\n"
+        f"Андрей прислал фото.{' Подпись: ' + caption if caption else ''}\n"
+        f"Проанализируй в контексте беседы."
+    )
 
     # Отправить в Claude Vision
     raw = await ask_claude_vision(
         image_base64=image_b64,
         media_type="image/jpeg",
         prompt=prompt,
-        system_prompt=VISION_TRADE_SYSTEM,
+        system_prompt=VISION_SYSTEM,
     )
 
-    # Попробовать распарсить JSON
+    # Сохранить ответ в историю чата (чтобы следующие фото знали контекст)
+    photo_desc = f"[Фото] {caption}" if caption else "[Фото]"
+    await db.save_message("user", photo_desc)
+    await db.save_message("assistant", raw[:500])
+
+    # Попробовать распарсить JSON (только если Claude вернул JSON — значит это сделка)
     parsed = None
     try:
-        # Убрать возможные markdown-блоки
         clean = raw.strip().strip("`").replace("```json", "").replace("```", "").strip()
         parsed = json.loads(clean)
     except (json.JSONDecodeError, ValueError):
-        logger.warning("Vision вернул не JSON: %s", raw[:200])
+        pass  # Обычный текст — не сделка
 
     if parsed is None:
-        # Claude ответил текстом — просто показать
-        await message.answer(raw)
+        # Claude ответил текстом — это описание/аналитика, просто показать
+        await message.answer(raw, parse_mode="Markdown")
         return
 
     result_type = parsed.get("type", "other")
+
+    # ─── Не сделка, но JSON с текстом ───
+    if result_type != "trade":
+        text = parsed.get("text", raw)
+        await message.answer(text)
+        return
 
     # ─── Сделка ───
     if result_type == "trade":
@@ -152,7 +174,3 @@ async def handle_photo(message: Message):
                     parse_mode="Markdown"
                 )
 
-    # ─── Не сделка ───
-    else:
-        text = parsed.get("text", raw)
-        await message.answer(text)
