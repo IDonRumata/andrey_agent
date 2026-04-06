@@ -98,7 +98,8 @@ async def cmd_start(message: types.Message):
         "/pnl — реализованная прибыль\n"
         "/export — выгрузить в CSV\n\n"
         "📅 /digest — сводка за сегодня (авто 21:00)\n"
-        "↩️ /undo — отменить последнее действие\n\n"
+        "↩️ /undo — отменить последнее действие\n"
+        "📓 /sync_vault — синхронизировать с Obsidian\n\n"
         "Или просто напиши/надиктуй/скинь фото — я пойму.",
         parse_mode="Markdown",
     )
@@ -107,6 +108,23 @@ async def cmd_start(message: types.Message):
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
     await cmd_start(message)
+
+
+@dp.message(Command("sync_vault"))
+async def cmd_sync_vault(message: types.Message):
+    """Синхронизировать все задачи и идеи из БД в Obsidian vault."""
+    await message.answer("🔄 Синхронизирую с Obsidian vault...")
+    try:
+        tasks = await db.get_active_tasks()
+        ideas = await db.get_ideas()
+        from services.obsidian import sync_all
+        count = await sync_all(tasks, ideas)
+        if count > 0:
+            await message.answer(f"✅ Синхронизировано {count} записей в vault.")
+        else:
+            await message.answer("ℹ️ Vault актуален — новых записей нет.")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка синхронизации: {e}")
 
 
 # --- Запуск ---
@@ -174,6 +192,7 @@ async def main():
         BotCommand(command="enreview",  description="Слова на повторение"),
         BotCommand(command="entest",    description="Мини-тест по словам"),
         BotCommand(command="engram",    description="Грамматика: /engram present perfect"),
+        BotCommand(command="sync_vault", description="Синхронизировать с Obsidian vault"),
         BotCommand(command="help",      description="Список всех команд"),
     ], scope=BotCommandScopeDefault())
     logger.info("Меню команд установлено")

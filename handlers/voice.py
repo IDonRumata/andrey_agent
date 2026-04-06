@@ -280,6 +280,8 @@ async def _dispatch_intent(
         await db.save_message("user", raw_text)
         await db.save_message("assistant", f"Задача #{task_id}: {task_text}")
         await message.answer(f"{prefix}✅ Задача #{task_id}: {task_text}{tag}", parse_mode="Markdown")
+        from services.obsidian import create_note
+        await create_note("task", task_text, project)
         return True
 
     # ── Идея ──
@@ -290,6 +292,8 @@ async def _dispatch_intent(
         await db.save_message("user", raw_text)
         await db.save_message("assistant", f"Идея #{idea_id}: {idea_text}")
         await message.answer(f"{prefix}💡 Идея #{idea_id}: {idea_text}{tag}", parse_mode="Markdown")
+        from services.obsidian import create_note
+        await create_note("idea", idea_text, project)
         return True
 
     # ── Вопрос — сразу Sonnet ──
@@ -324,3 +328,5 @@ async def _save_to_project(message: types.Message, raw_text: str, local: dict, p
         f"{prefix}📁 [{entry_type.upper()}] → *{project['name']}*: {entry_text}{tag}",
         parse_mode="Markdown",
     )
+    from services.obsidian import create_note
+    await create_note(entry_type, entry_text, project["name"])
