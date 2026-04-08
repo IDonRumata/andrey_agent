@@ -317,6 +317,38 @@ async def _start_placement_speaking(message: Message, state: FSMContext):
     )
 
 
+def _heuristic_speaking_score(text: str) -> tuple[dict, float]:
+    """
+    Быстрая оценка speaking без LLM.
+    Считаем английские слова — достаточно для placement test.
+    Полная LLM-оценка доступна через /en_speak.
+    """
+    if not text:
+        return {"fluency": 0, "grammar": 0, "vocabulary": 0, "task_completion": 0,
+                "cefr": "A0", "feedback_ru": "Ответ не записан.", "corrected": ""}, 0.0
+    words = text.split()
+    # Считаем слова с латинскими буквами как английские
+    en_words = [w for w in words if any(c.isalpha() and ord(c) < 128 for c in w)]
+    en_ratio = len(en_words) / max(len(words), 1)
+    wc = len(en_words)
+    if en_ratio < 0.3:
+        # Ответил не по-английски
+        score_dict = {"fluency": 1, "grammar": 1, "vocabulary": 1, "task_completion": 1,
+                      "cefr": "A1", "feedback_ru": "Постарайся отвечать по-английски — даже простыми словами!", "corrected": ""}
+        return score_dict, 20.0
+    if wc >= 25:
+        fd = {"fluency": 4, "grammar": 3, "vocabulary": 3, "task_completion": 4,
+              "cefr": "A2", "feedback_ru": "Хороший развёрнутый ответ!", "corrected": ""}
+        return fd, 70.0
+    if wc >= 12:
+        fd = {"fluency": 3, "grammar": 2, "vocabulary": 2, "task_completion": 3,
+              "cefr": "A2", "feedback_ru": "Неплохо! Попробуй добавить больше деталей.", "corrected": ""}
+        return fd, 50.0
+    fd = {"fluency": 2, "grammar": 2, "vocabulary": 2, "task_completion": 2,
+          "cefr": "A1", "feedback_ru": "Начало есть! Старайся говорить полными предложениями.", "corrected": ""}
+    return fd, 35.0
+
+
 @router.message(PlacementFSM.speaking, F.voice)
 async def placement_speaking_voice(message: Message, state: FSMContext):
     import os
@@ -335,18 +367,11 @@ async def placement_speaking_voice(message: Message, state: FSMContext):
         return
 
     await message.answer(f"📝 Распознано: _{text}_", parse_mode="Markdown")
-    await message.answer("🤖 Оцениваю... (до 30 сек)")
 
     data = await state.get_data()
-    try:
-        eval_result = await speaking_eval.evaluate(data["speaking_q"], text)
-    except Exception as e:
-        logger.warning("Speaking eval failed: %s", e)
-        eval_result = {
-            "fluency": 2, "grammar": 2, "vocabulary": 2, "task_completion": 3,
-            "cefr": "A1", "feedback_ru": "Оценка недоступна, но тест засчитан!", "corrected": "",
-        }
-    speaking_score = speaking_eval.overall_score(eval_result)
+    # Placement test: быстрая эвристика без LLM (мгновенно).
+    # Полная AI-оценка доступна через /en_speak
+    eval_result, speaking_score = _heuristic_speaking_score(text)
 
     cefr = assessment.estimate_cefr(
         data["vocab_correct"], len(data["vocab_queue"]),
