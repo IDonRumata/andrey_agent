@@ -204,17 +204,19 @@ async def _dispatch_intent(
 
     # ── English — повторение ──
     if intent == "english_review":
-        from handlers.english import cmd_review
-        await cmd_review(message)
+        from handlers.english import cmd_en_review
+        await cmd_en_review(message)
         return True
 
-    # ── English — тест ──
-    if intent == "english_test":
-        from handlers.english import cmd_test
-        await cmd_test(message)
+    # ── English — блок упражнений ──
+    if intent == "english_test" or intent == "english_block":
+        await message.answer(
+            f"{prefix}▶️ Запусти блок: /en_block",
+            parse_mode="Markdown",
+        )
         return True
 
-    # ── English — общее ──
+    # ── English — общее (запомни слово, переведи и т.д.) ──
     if intent == "english":
         from handlers.english import handle_english_voice
         await handle_english_voice(message, raw_text, prefix)
@@ -280,8 +282,6 @@ async def _dispatch_intent(
         await db.save_message("user", raw_text)
         await db.save_message("assistant", f"Задача #{task_id}: {task_text}")
         await message.answer(f"{prefix}✅ Задача #{task_id}: {task_text}{tag}", parse_mode="Markdown")
-        from services.obsidian import create_note
-        await create_note("task", task_text, project)
         return True
 
     # ── Идея ──
@@ -292,8 +292,6 @@ async def _dispatch_intent(
         await db.save_message("user", raw_text)
         await db.save_message("assistant", f"Идея #{idea_id}: {idea_text}")
         await message.answer(f"{prefix}💡 Идея #{idea_id}: {idea_text}{tag}", parse_mode="Markdown")
-        from services.obsidian import create_note
-        await create_note("idea", idea_text, project)
         return True
 
     # ── Вопрос — сразу Sonnet ──
@@ -328,5 +326,3 @@ async def _save_to_project(message: types.Message, raw_text: str, local: dict, p
         f"{prefix}📁 [{entry_type.upper()}] → *{project['name']}*: {entry_text}{tag}",
         parse_mode="Markdown",
     )
-    from services.obsidian import create_note
-    await create_note(entry_type, entry_text, project["name"])
