@@ -74,9 +74,10 @@ def _uid(message_or_cb) -> int:
 
 
 async def _send_with_audio(message: Message, text: str, voice_text: str | None = None,
-                            second: bool = False, kb: InlineKeyboardMarkup | None = None):
+                            second: bool = False, kb: InlineKeyboardMarkup | None = None,
+                            parse_mode: str = "HTML"):
     """Отправить текст + озвучку (всегда оба, как договорились)."""
-    await message.answer(text, parse_mode="Markdown", reply_markup=kb)
+    await message.answer(text, parse_mode=parse_mode, reply_markup=kb)
     try:
         audio_path = await synthesize(voice_text or _strip_markdown(text), second=second)
         audio = BufferedInputFile(audio_path.read_bytes(), filename="en.ogg")
@@ -310,9 +311,10 @@ async def _start_placement_speaking(message: Message, state: FSMContext):
     q = assessment.PLACEMENT_SPEAKING[1]  # средний (A2) — для начала
     await state.update_data(speaking_q=q["q"])
     await state.set_state(PlacementFSM.speaking)
+    from html import escape as _h
     await _send_with_audio(
         message,
-        f"🗣 *Часть 3 — Speaking*\n\nПрослушай вопрос и запиши голосовой ответ (30-90 сек):\n\n_{q['q']}_",
+        f"🗣 <b>Часть 3 — Speaking</b>\n\nПрослушай вопрос и запиши голосовой ответ (30-90 сек):\n\n<i>{_h(q['q'])}</i>",
         voice_text=q["q"],
     )
 
@@ -641,9 +643,10 @@ async def cmd_en_speak(message: Message, state: FSMContext):
 
     await state.set_state(SpeakFSM.awaiting_audio)
     await state.update_data(question=q)
+    from html import escape as _h
     await _send_with_audio(
         message,
-        f"🗣 *Speaking practice*\n\nПрослушай вопрос и ответь голосом (30-90 сек):\n\n_{q}_",
+        f"🗣 <b>Speaking practice</b>\n\nПрослушай вопрос и ответь голосом (30-90 сек):\n\n<i>{_h(q)}</i>",
         voice_text=q,
     )
 
