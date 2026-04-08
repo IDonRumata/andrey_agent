@@ -15,7 +15,7 @@ import database as db
 
 logger = logging.getLogger(__name__)
 
-client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY, timeout=25.0)
 
 # --- Модели и цены (USD за 1M токенов) ---
 MODELS = {

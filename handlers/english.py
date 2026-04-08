@@ -335,10 +335,17 @@ async def placement_speaking_voice(message: Message, state: FSMContext):
         return
 
     await message.answer(f"📝 Распознано: _{text}_", parse_mode="Markdown")
-    await message.answer("🤖 Оцениваю...")
+    await message.answer("🤖 Оцениваю... (до 30 сек)")
 
     data = await state.get_data()
-    eval_result = await speaking_eval.evaluate(data["speaking_q"], text)
+    try:
+        eval_result = await speaking_eval.evaluate(data["speaking_q"], text)
+    except Exception as e:
+        logger.warning("Speaking eval failed: %s", e)
+        eval_result = {
+            "fluency": 2, "grammar": 2, "vocabulary": 2, "task_completion": 3,
+            "cefr": "A1", "feedback_ru": "Оценка недоступна, но тест засчитан!", "corrected": "",
+        }
     speaking_score = speaking_eval.overall_score(eval_result)
 
     cefr = assessment.estimate_cefr(

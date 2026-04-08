@@ -2,6 +2,7 @@
 Оценка устного ответа через Claude Sonnet по CEFR-рубрике.
 Используется только когда локальной проверки недостаточно (свободная речь).
 """
+import asyncio
 import json
 import logging
 
@@ -37,13 +38,29 @@ async def evaluate(prompt_en: str, learner_response: str, expected: str | None =
     if expected:
         user += f"\nEXPECTED MODEL ANSWER:\n{expected}\n"
 
-    response = await ask_claude(
-        user_message=user,
-        system_prompt=SPEAKING_RUBRIC_SYSTEM,
-        tier="sonnet",
-        use_history=False,
-        use_cache=False,
-    )
+    try:
+        response = await asyncio.wait_for(
+            ask_claude(
+                user_message=user,
+                system_prompt=SPEAKING_RUBRIC_SYSTEM,
+                tier="sonnet",
+                use_history=False,
+                use_cache=False,
+            ),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Speaking eval: timeout after 30s")
+        return {
+            "fluency": 2, "grammar": 2, "vocabulary": 2, "task_completion": 3,
+            "cefr": "A1", "feedback_ru": "Оценка временно недоступна (таймаут). Продолжай!", "corrected": "",
+        }
+    except Exception as e:
+        logger.warning("Speaking eval: API error: %s", e)
+        return {
+            "fluency": 2, "grammar": 2, "vocabulary": 2, "task_completion": 3,
+            "cefr": "A1", "feedback_ru": "Не удалось связаться с оценщиком. Продолжай!", "corrected": "",
+        }
     try:
         clean = response.strip().strip("`").replace("```json", "").replace("```", "").strip()
         return json.loads(clean)
