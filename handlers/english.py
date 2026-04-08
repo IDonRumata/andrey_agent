@@ -441,16 +441,18 @@ async def cmd_en_block(message: Message, state: FSMContext):
 
     await state.set_state(BlockFSM.in_progress)
     await state.update_data(block=block, idx=0, correct=0, unit_id=unit["id"])
+    from html import escape as _h
     await message.answer(
-        f"▶️ *Блок упражнений* — Unit {unit['number']} {unit['title']}\n"
+        f"▶️ <b>Блок упражнений</b> — Unit {unit['number']} {_h(unit['title'])}\n"
         f"6 упражнений · ~10 минут\n\n"
-        f"Отвечай голосом или текстом. Команда `/skip` — пропустить.",
-        parse_mode="Markdown",
+        f"Отвечай голосом или текстом. Команда /skip — пропустить.",
+        parse_mode="HTML",
     )
     await _show_exercise(message, state)
 
 
 async def _show_exercise(message: Message, state: FSMContext):
+    from html import escape as _h
     data = await state.get_data()
     idx = data["idx"]
     block = data["block"]
@@ -459,38 +461,51 @@ async def _show_exercise(message: Message, state: FSMContext):
         return
 
     ex = block[idx]
-    header = f"*{idx + 1}/{len(block)}* · _{ex['type']}_"
+    header = f"<b>{idx + 1}/{len(block)}</b> · <i>{_h(ex['type'])}</i>"
+    try:
+        if ex["type"] == "chunk_drill":
+            prompt = _h(ex['prompt_text'])
+            translation = _h(ex.get('translation') or '')
+            await _send_with_audio(
+                message,
+                f"{header}\n\n🔁 <b>Shadowing</b>\nПовтори вслух за голосом:\n\n<b>{prompt}</b>\n\n<i>{translation}</i>",
+                voice_text=ex["prompt_text"],
+            )
+            await message.answer("Когда повторил — отправь любое сообщение или /next.", parse_mode="HTML")
 
-    if ex["type"] == "chunk_drill":
-        await _send_with_audio(
-            message,
-            f"{header}\n\n🔁 *Shadowing*\nПовтори вслух за голосом:\n\n*{ex['prompt_text']}*\n\n_{ex.get('translation') or ''}_",
-            voice_text=ex["prompt_text"],
-        )
-        await message.answer("Когда повторил — отправь любое сообщение или `/next`.", parse_mode="Markdown")
+        elif ex["type"] == "translate_to_en":
+            ru = ex['prompt_text'].split('«')[-1].rstrip('»') if '«' in ex['prompt_text'] else ex['prompt_text']
+            await message.answer(
+                f"{header}\n\n🔄 <b>Скажи по-английски:</b>\n\n«{_h(ru)}»\n\n"
+                f"<i>Подсказка: ключевое слово — {_h(ex.get('hint',''))}</i>",
+                parse_mode="HTML",
+            )
 
-    elif ex["type"] == "translate_to_en":
-        await message.answer(
-            f"{header}\n\n🔄 *Скажи по-английски:*\n\n«{ex['prompt_text'].split('«')[-1].rstrip('»')}»\n\n"
-            f"_Подсказка: ключевое слово — {ex.get('hint','')}_",
-            parse_mode="Markdown",
-        )
+        elif ex["type"] == "gap_fill":
+            await message.answer(
+                f"{header}\n\n📝 <b>Заполни пропуск:</b>\n\n<code>{_h(ex['prompt_text'])}</code>",
+                parse_mode="HTML",
+            )
 
-    elif ex["type"] == "gap_fill":
-        await message.answer(
-            f"{header}\n\n📝 *Заполни пропуск:*\n\n`{ex['prompt_text']}`",
-            parse_mode="Markdown",
-        )
-
-    elif ex["type"] == "multiple_choice":
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=opt, callback_data=f"enmc:{i}")]
-            for i, opt in enumerate(ex["options"])
-        ])
-        await message.answer(
-            f"{header}\n\n☑️ *Выбери:*\n\n{ex['prompt_text']}",
-            parse_mode="Markdown", reply_markup=kb,
-        )
+        elif ex["type"] == "multiple_choice":
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=opt, callback_data=f"enmc:{i}")]
+                for i, opt in enumerate(ex["options"])
+            ])
+            await message.answer(
+                f"{header}\n\n☑️ <b>Выбери:</b>\n\n{_h(ex['prompt_text'])}",
+                parse_mode="HTML", reply_markup=kb,
+            )
+        else:
+            logger.warning("Unknown exercise type: %s", ex.get("type"))
+            await message.answer(f"⚠️ Неизвестный тип упражнения: {ex.get('type')}, пропускаю.")
+            await state.update_data(idx=idx + 1)
+            await _show_exercise(message, state)
+    except Exception as e:
+        logger.exception("Failed to show exercise idx=%s type=%s: %s", idx, ex.get("type"), e)
+        await message.answer(f"⚠️ Ошибка показа упражнения ({ex.get('type')}): {e}\nПропускаю.")
+        await state.update_data(idx=idx + 1)
+        await _show_exercise(message, state)
 
 
 @router.callback_query(BlockFSM.in_progress, F.data.startswith("enmc:"))
@@ -499,8 +514,9 @@ async def cb_block_mc(cb: CallbackQuery, state: FSMContext):
     ex = data["block"][data["idx"]]
     chosen = ex["options"][int(cb.data.split(":")[1])]
     is_correct = exercises.check_answer(ex["expected_answer"], chosen)
-    fb = "✅" if is_correct else f"❌ Правильно: *{ex['expected_answer']}*"
-    await cb.message.edit_text(f"{cb.message.text}\n\n{chosen}\n{fb}", parse_mode="Markdown")
+    from html import escape as _h
+    fb = "✅" if is_correct else f"❌ Правильно: <b>{_h(str(ex['expected_answer']))}</b>"
+    await cb.message.edit_text(f"{cb.message.text}\n\n{_h(chosen)}\n{fb}", parse_mode="HTML")
     await state.update_data(idx=data["idx"] + 1, correct=data["correct"] + (1 if is_correct else 0))
     await cb.answer()
     await _show_exercise(cb.message, state)
