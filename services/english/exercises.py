@@ -14,13 +14,24 @@ def _normalize(s: str) -> str:
 
 
 def check_answer(expected: str, given: str) -> bool:
-    """Лояльная проверка: регистр/пробелы/точка не важны."""
+    """
+    Лояльная проверка:
+    - регистр/пробелы/точка не важны
+    - если ответ содержит ожидаемую фразу — засчитываем (partial match)
+    - 1 опечатка для коротких слов
+    """
     a = _normalize(expected).rstrip(".!?,")
     b = _normalize(given).rstrip(".!?,")
     if a == b:
         return True
-    # Разрешаем 1 опечатку для коротких слов
-    if len(a) <= 8 and len(b) <= 8:
+    # Partial match: ответ содержит ключевую фразу
+    if a and a in b:
+        return True
+    # Ключевая фраза содержится в ожидаемом (студент сказал правильный чанк в составе)
+    if b and b in a:
+        return True
+    # 1 опечатка для коротких слов
+    if len(a) <= 10 and len(b) <= 10:
         return _levenshtein(a, b) <= 1
     return False
 
@@ -44,16 +55,21 @@ def _levenshtein(a: str, b: str) -> int:
 # ─────────────────── Генераторы ───────────────────
 
 async def gen_translate_to_en(unit_id: int) -> dict | None:
-    """RU → EN: Андрей видит русский, голосом говорит/пишет английский."""
+    """RU → EN: Андрей видит русский, голосом говорит/пишет английский чанк."""
     chunks = await db.en_get_chunks_by_unit(unit_id, limit=200)
-    chunks = [c for c in chunks if c.get("translation_ru") and c.get("example_en")]
+    chunks = [c for c in chunks if c.get("translation_ru")]
     if not chunks:
         return None
     c = random.choice(chunks)
+    # Проверяем по ЧАНКУ (ключевой фразе), не по полному предложению.
+    # Полное предложение — только как образец в фидбеке.
+    ru_prompt = c.get("example_ru") or c["translation_ru"]
+    example_en = c.get("example_en") or ""
     return {
         "type": "translate_to_en",
-        "prompt_text": f"Скажи по-английски: «{c['example_ru'] or c['translation_ru']}»",
-        "expected_answer": c["example_en"] or c["chunk"],
+        "prompt_text": f"«{ru_prompt}»",  # без "Скажи по-английски" — он в заголовке
+        "expected_answer": c["chunk"],    # проверяем только ключевой чанк
+        "example_en": example_en,         # полное предложение-образец для фидбека
         "hint": c["chunk"],
         "chunk_id": c["id"],
         "source": "outcomes_elem",

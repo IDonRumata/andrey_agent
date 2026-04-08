@@ -566,6 +566,7 @@ async def block_text_answer(message: Message, state: FSMContext):
 
 
 async def _check_text_answer(message: Message, state: FSMContext, given: str):
+    from html import escape as _h
     data = await state.get_data()
     ex = data["block"][data["idx"]]
     if ex["type"] == "chunk_drill":
@@ -574,9 +575,17 @@ async def _check_text_answer(message: Message, state: FSMContext, given: str):
         feedback = "👍"
     else:
         is_correct = exercises.check_answer(ex["expected_answer"], given)
-        feedback = "✅" if is_correct else f"❌ Правильно: *{ex['expected_answer']}*"
+        if is_correct:
+            feedback = "✅"
+        else:
+            # Показать ключевой чанк + полное предложение-образец если есть
+            correct_chunk = _h(str(ex["expected_answer"]))
+            example = _h(ex.get("example_en") or "")
+            feedback = f"❌ Ключевая фраза: <b>{correct_chunk}</b>"
+            if example:
+                feedback += f"\n📖 Пример: <i>{example}</i>"
 
-    await message.answer(f"_{given}_\n{feedback}", parse_mode="Markdown")
+    await message.answer(f"<i>{_h(given)}</i>\n{feedback}", parse_mode="HTML")
     await state.update_data(idx=data["idx"] + 1, correct=data["correct"] + (1 if is_correct else 0))
     await _show_exercise(message, state)
 
@@ -595,12 +604,12 @@ async def _finish_block(message: Message, state: FSMContext):
     # Адаптация целевого темпа
     new_target = await curriculum.adapt_daily_target(message.from_user.id)
     await message.answer(
-        f"🏁 *Блок завершён*\n\n"
+        f"🏁 <b>Блок завершён</b>\n\n"
         f"Правильно: {correct}/{total}\n"
-        f"`{bar}` {pct}%\n\n"
+        f"<code>{bar}</code> {pct}%\n\n"
         f"Цель на день: {new_target} новых чанков\n\n"
         f"Ещё блок? /en_block · Меню: /en",
-        parse_mode="Markdown",
+        parse_mode="HTML",
     )
     await state.clear()
 
