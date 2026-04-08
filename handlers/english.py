@@ -284,8 +284,9 @@ async def _ask_placement_grammar(message: Message, state: FSMContext):
         for i, opt in enumerate(q["options"])
     ])
     await state.update_data(current_q=q)
+    # HTML mode: grammar questions contain ___ (fill-in blanks) which break Markdown parsing
     await message.answer(
-        f"*{idx + 1}/{len(queue)}*\n{q['q']}", parse_mode="Markdown", reply_markup=kb,
+        f"<b>{idx + 1}/{len(queue)}</b>\n{q['q']}", parse_mode="HTML", reply_markup=kb,
     )
 
 
@@ -295,8 +296,8 @@ async def cb_placement_grammar(cb: CallbackQuery, state: FSMContext):
     q = data["current_q"]
     chosen = q["options"][int(cb.data.split(":")[1])]
     is_correct = chosen == q["answer"]
-    feedback = "✅" if is_correct else f"❌ Правильно: *{q['answer']}*"
-    await cb.message.edit_text(f"{cb.message.text}\n\nТы выбрал: {chosen}\n{feedback}", parse_mode="Markdown")
+    feedback = "✅" if is_correct else f"❌ Правильно: <b>{q['answer']}</b>"
+    await cb.message.edit_text(f"{cb.message.text}\n\nТы выбрал: {chosen}\n{feedback}", parse_mode="HTML")
     await state.update_data(
         gram_idx=data["gram_idx"] + 1,
         gram_correct=data["gram_correct"] + (1 if is_correct else 0),
