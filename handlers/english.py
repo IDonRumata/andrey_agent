@@ -366,7 +366,8 @@ async def placement_speaking_voice(message: Message, state: FSMContext):
         await message.answer("Не разобрал речь, попробуй ещё раз.")
         return
 
-    await message.answer(f"📝 Распознано: _{text}_", parse_mode="Markdown")
+    from html import escape as _esc_txt
+    await message.answer(f"📝 Распознано: <i>{_esc_txt(text)}</i>", parse_mode="HTML")
 
     data = await state.get_data()
     # Placement test: быстрая эвристика без LLM (мгновенно).
@@ -398,20 +399,22 @@ async def placement_speaking_voice(message: Message, state: FSMContext):
         last_assessed_at="datetime('now')",
     )
 
+    from html import escape as _esc
+    feedback = _esc(eval_result.get('feedback_ru', ''))
     await message.answer(
-        f"🎓 *Результаты теста*\n\n"
+        f"🎓 <b>Результаты теста</b>\n\n"
         f"📚 Словарь: {data['vocab_correct']}/{len(data['vocab_queue'])}\n"
         f"📐 Грамматика: {data['gram_correct']}/{len(data['gram_queue'])}\n"
         f"🗣 Speaking: {speaking_score:.0f}/100\n"
         f"   • fluency: {eval_result.get('fluency', 0)}/5\n"
         f"   • grammar: {eval_result.get('grammar', 0)}/5\n"
         f"   • vocab: {eval_result.get('vocabulary', 0)}/5\n\n"
-        f"🎯 *Твой уровень: {cefr}*\n"
-        f"📖 Рекомендую начать с *Unit {starting_unit}*\n\n"
-        f"💬 _{eval_result.get('feedback_ru', '')}_\n\n"
-        f"Установить юнит: `/en_unit {starting_unit}`\n"
+        f"🎯 <b>Твой уровень: {_esc(cefr)}</b>\n"
+        f"📖 Рекомендую начать с <b>Unit {starting_unit}</b>\n\n"
+        f"💬 <i>{feedback}</i>\n\n"
+        f"Установить юнит: <code>/en_unit {starting_unit}</code>\n"
         f"Затем: /en_block",
-        parse_mode="Markdown",
+        parse_mode="HTML",
     )
     await state.clear()
 
