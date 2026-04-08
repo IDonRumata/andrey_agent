@@ -29,6 +29,8 @@ import database as db
 logger = logging.getLogger("ingest_outcomes")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+_FORCE_OCR = False  # устанавливается из main() через --ocr флаг
+
 
 # Известное оглавление Outcomes Elementary (из распарсенных страниц 2-5)
 OUTCOMES_ELEM_UNITS = [
@@ -242,7 +244,7 @@ async def ingest_student_book(pdf_path: Path):
             )
 
         # Парсим страницы юнита
-        pages_text = extract_pages(pdf_path, (p_start, p_end))
+        pages_text = extract_pages(pdf_path, (p_start, p_end), force_ocr=_FORCE_OCR)
         unit_chunks = unit_sentences = unit_dialogs = 0
 
         for page_idx, text in enumerate(pages_text):
@@ -308,7 +310,7 @@ async def ingest_workbook(pdf_path: Path):
         wb_start = base_page + (num - 1) * pages_per_unit
         wb_end = wb_start + pages_per_unit - 1
 
-        pages_text = extract_pages(pdf_path, (wb_start, wb_end))
+        pages_text = extract_pages(pdf_path, (wb_start, wb_end), force_ocr=_FORCE_OCR)
         unit_ex = 0
 
         for page_idx, text in enumerate(pages_text):
@@ -338,12 +340,8 @@ async def main():
     parser.add_argument("--ocr", action="store_true", help="Force OCR mode (for scanned PDFs)")
     args = parser.parse_args()
 
-    # Передаём force_ocr в extract_pages через monkey-patch аргумента
-    if args.ocr:
-        import functools
-        original_extract = extract_pages
-        def extract_pages(path, rng, force_ocr=False):  # noqa: F811
-            return original_extract(path, rng, force_ocr=True)
+    global _FORCE_OCR
+    _FORCE_OCR = args.ocr
 
     await db.init_db()
 
