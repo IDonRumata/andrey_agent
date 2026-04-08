@@ -140,8 +140,9 @@ EXERCISE_GENERATORS = {
 
 
 async def build_block(unit_id: int, n: int = 6) -> list[dict]:
-    """Собрать упражнения для одного блока (~10 мин). Interleaving по типам."""
-    types_order = ["drill", "translate", "gap_fill", "mc", "drill", "translate"]
+    """Собрать упражнения для одного блока (~10 мин). Interleaving по типам.
+    gap_fill отключён — OCR-данные из Workbook некачественные."""
+    types_order = ["drill", "translate", "drill", "translate", "drill", "translate"]
     block = []
     for t in types_order[:n]:
         gen = EXERCISE_GENERATORS[t]
