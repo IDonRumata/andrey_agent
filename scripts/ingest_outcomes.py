@@ -2,21 +2,16 @@
 Парсер Outcomes Elementary (Student's Book + Workbook) → english_units / chunks / sentences / exercises / grammar.
 
 Запуск:
-    python -m scripts.ingest_outcomes
-    # или с явными путями:
-    python -m scripts.ingest_outcomes --sb path/to/SB.pdf --wb path/to/WB.pdf
+    python3 -m scripts.ingest_outcomes
+    python3 -m scripts.ingest_outcomes --sb path/to/SB.pdf --wb path/to/WB.pdf
+    python3 -m scripts.ingest_outcomes --ocr          # OCR-режим для сканов
 
-Работает локально (Windows / Linux). Требует pdfplumber.
+Автоматически определяет: если pdfplumber не получает текст (скан) и установлен
+pytesseract — переключается на OCR. Требует: tesseract-ocr + pytesseract + Pillow.
 
-Логика:
-1. Берёт страницы из PDF через pdfplumber.
-2. Детектит заголовки юнитов по шаблону "1 PEOPLE AND PLACES" и т.п.
-3. Создаёт english_units на основе известного оглавления Outcomes Elementary.
-4. На каждой странице юнита выделяет: vocab-блоки (списки слов с переводами/IPA),
-   диалоги (Speaker A/B), примеры предложений, упражнения с пропусками.
-5. Делает упор на recall, а не на 100% покрытие — лучше меньше, но качественно.
-
-Фолбэк: если pdfplumber что-то не вытащил — пропускаем страницу, не падаем.
+Установка OCR на Ubuntu:
+    apt-get install -y tesseract-ocr tesseract-ocr-eng
+    pip install pytesseract
 """
 import argparse
 import asyncio
@@ -91,21 +86,67 @@ OUTCOMES_ELEM_UNITS = [
 
 # ─────────────────────── PDF utils ───────────────────────
 
-def extract_pages(pdf_path: Path, page_range: tuple[int, int]) -> list[str]:
-    """Извлечь текст со страниц [start, end] (1-indexed inclusive)."""
+def _is_scanned(pdf_path: Path, sample_pages: int = 3) -> bool:
+    """Проверить первые N страниц — если текста нет, значит скан."""
+    try:
+        import pdfplumber
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            for page in pdf.pages[:sample_pages]:
+                txt = page.extract_text() or ""
+                if len(txt.strip()) > 50:
+                    return False
+        return True
+    except Exception:
+        return True
+
+
+def _extract_page_ocr(pdf_path: Path, page_index: int) -> str:
+    """OCR одной страницы через pytesseract."""
+    try:
+        import pdfplumber
+        import pytesseract
+        from PIL import Image
+        import io
+
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            if page_index >= len(pdf.pages):
+                return ""
+            page = pdf.pages[page_index]
+            # Рендерим страницу в изображение с разрешением 200 dpi
+            img = page.to_image(resolution=200).original
+            # pytesseract принимает PIL Image
+            text = pytesseract.image_to_string(img, lang="eng", config="--psm 3")
+            return text
+    except Exception as e:
+        logger.warning("OCR page %d failed: %s", page_index + 1, e)
+        return ""
+
+
+def extract_pages(pdf_path: Path, page_range: tuple[int, int],
+                  force_ocr: bool = False) -> list[str]:
+    """Извлечь текст со страниц [start, end] (1-indexed inclusive).
+    Автоматически переключается на OCR если PDF — скан."""
     try:
         import pdfplumber
     except ImportError:
         logger.error("pdfplumber не установлен. pip install pdfplumber")
         raise
+
+    use_ocr = force_ocr or _is_scanned(pdf_path)
+    if use_ocr:
+        logger.info("PDF определён как скан — использую OCR (медленнее, но точнее)")
+
     out = []
     with pdfplumber.open(str(pdf_path)) as pdf:
         for i in range(page_range[0] - 1, min(page_range[1], len(pdf.pages))):
-            try:
-                txt = pdf.pages[i].extract_text() or ""
-            except Exception as e:
-                logger.warning("Page %d extract failed: %s", i + 1, e)
-                txt = ""
+            if use_ocr:
+                txt = _extract_page_ocr(pdf_path, i)
+            else:
+                try:
+                    txt = pdf.pages[i].extract_text() or ""
+                except Exception as e:
+                    logger.warning("Page %d extract failed: %s", i + 1, e)
+                    txt = ""
             out.append(txt)
     return out
 
@@ -294,7 +335,15 @@ async def main():
     parser.add_argument("--wb", default=config.EN_OUTCOMES_WB_PDF, help="Path to Workbook PDF")
     parser.add_argument("--skip-sb", action="store_true")
     parser.add_argument("--skip-wb", action="store_true")
+    parser.add_argument("--ocr", action="store_true", help="Force OCR mode (for scanned PDFs)")
     args = parser.parse_args()
+
+    # Передаём force_ocr в extract_pages через monkey-patch аргумента
+    if args.ocr:
+        import functools
+        original_extract = extract_pages
+        def extract_pages(path, rng, force_ocr=False):  # noqa: F811
+            return original_extract(path, rng, force_ocr=True)
 
     await db.init_db()
 
