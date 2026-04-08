@@ -17,9 +17,10 @@ client = openai.AsyncOpenAI(api_key=config.OPENAI_API_KEY)
 WHISPER_PRICE_PER_SEC = 0.006 / 60
 
 
-async def transcribe(audio_path: str, duration_sec: int = 0) -> str | None:
+async def transcribe(audio_path: str, duration_sec: int = 0, language: str = "ru") -> str | None:
     """
     Транскрибировать аудиофайл через Whisper API.
+    language: ISO-639-1 ("ru", "en"). По умолчанию — русский.
     Возвращает None если аудио слишком короткое.
     """
     if duration_sec and duration_sec < config.WHISPER_MIN_DURATION_SEC:
@@ -30,7 +31,7 @@ async def transcribe(audio_path: str, duration_sec: int = 0) -> str | None:
         response = await client.audio.transcriptions.create(
             model=config.WHISPER_MODEL,
             file=audio_file,
-            language="ru",
+            language=language,
         )
 
     text = response.text.strip()

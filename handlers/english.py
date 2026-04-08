@@ -358,7 +358,7 @@ async def placement_speaking_voice(message: Message, state: FSMContext):
         tmp_path = tmp.name
         await message.bot.download_file(file.file_path, destination=tmp_path)
     try:
-        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0)
+        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0, language="en")
     finally:
         os.unlink(tmp_path)
 
@@ -515,7 +515,7 @@ async def block_voice_answer(message: Message, state: FSMContext):
         tmp_path = tmp.name
         await message.bot.download_file(file.file_path, destination=tmp_path)
     try:
-        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0)
+        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0, language="en")
     finally:
         os.unlink(tmp_path)
 
@@ -641,7 +641,7 @@ async def speak_answer(message: Message, state: FSMContext):
         tmp_path = tmp.name
         await message.bot.download_file(file.file_path, destination=tmp_path)
     try:
-        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0)
+        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0, language="en")
     finally:
         os.unlink(tmp_path)
 
@@ -704,7 +704,7 @@ async def lesson_voice(message: Message, state: FSMContext):
         tmp_path = tmp.name
         await message.bot.download_file(file.file_path, destination=tmp_path)
     try:
-        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0)
+        text = await transcribe(tmp_path, duration_sec=message.voice.duration or 0, language="en")
     finally:
         os.unlink(tmp_path)
     if text:
