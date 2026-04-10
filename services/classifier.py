@@ -213,12 +213,8 @@ def classify_local(text: str) -> dict | None:
             "source": "local",
         }
 
-    # 0b. Голосовые команды (show_tasks, portfolio, briefing и т.д.)
-    voice_cmd = detect_voice_command(text)
-    if voice_cmd:
-        return voice_cmd
-
-    # 1а. "Добавление/обновление в проект X: ..."
+    # 0b. "Добавление/обновление в проект X: ..." — до голосовых команд,
+    # иначе слова типа "статистику" внутри текста дают ложное совпадение metrics.
     m = PROJECT_NOTE_PATTERN.match(text)
     if m:
         project_name = m.group(1).strip().rstrip(":")
@@ -232,7 +228,12 @@ def classify_local(text: str) -> dict | None:
             "source": "local",
         }
 
-    # 1б. Привязка к проекту: "по проекту X — ..."
+    # 0c. Голосовые команды (show_tasks, portfolio, briefing и т.д.)
+    voice_cmd = detect_voice_command(text)
+    if voice_cmd:
+        return voice_cmd
+
+    # 1. Привязка к проекту: "по проекту X — ..."
     m = PROJECT_PATTERN.match(text)
     if m:
         project_name = m.group(1).strip()
