@@ -202,26 +202,6 @@ async def _dispatch_intent(
         await cmd_stats(message)
         return True
 
-    # ── English — повторение ──
-    if intent == "english_review":
-        from handlers.english import cmd_en_review
-        await cmd_en_review(message)
-        return True
-
-    # ── English — блок упражнений ──
-    if intent == "english_test" or intent == "english_block":
-        await message.answer(
-            f"{prefix}▶️ Запусти блок: /en_block",
-            parse_mode="Markdown",
-        )
-        return True
-
-    # ── English — общее (запомни слово, переведи и т.д.) ──
-    if intent == "english":
-        from handlers.english import handle_english_voice
-        await handle_english_voice(message, raw_text, prefix)
-        return True
-
     # ── Отжимания / метрики ──
     if intent == "pushups":
         from datetime import date

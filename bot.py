@@ -32,7 +32,7 @@ stream_handler.setFormatter(log_formatter)
 logging.basicConfig(level=logging.INFO, handlers=[file_handler, stream_handler])
 logger = logging.getLogger(__name__)
 
-# --- Бот и диспетчер (с FSM storage для English-модуля) ---
+# --- Бот и диспетчер ---
 bot = Bot(token=config.TELEGRAM_BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
@@ -81,7 +81,6 @@ def main_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🎯 Задачи и идеи", callback_data="m:tasks")],
         [InlineKeyboardButton(text="💼 Проекты", callback_data="m:projects")],
         [InlineKeyboardButton(text="📈 Портфель", callback_data="m:portfolio")],
-        [InlineKeyboardButton(text="🇬🇧 Английский", callback_data="m:english")],
         [InlineKeyboardButton(text="📊 Метрики и брифинг", callback_data="m:metrics")],
         [InlineKeyboardButton(text="✍️ Контент", callback_data="m:content")],
         [InlineKeyboardButton(text="🔍 Поиск", callback_data="m:search")],
@@ -185,13 +184,6 @@ async def cb_portfolio(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query(lambda c: c.data == "m:english")
-async def cb_english(cb: types.CallbackQuery):
-    from handlers.english import cmd_english_menu
-    await cmd_english_menu(cb.message)
-    await cb.answer()
-
-
 @dp.callback_query(lambda c: c.data == "m:metrics")
 async def cb_metrics(cb: types.CallbackQuery):
     await cb.message.edit_text(
@@ -269,19 +261,6 @@ async def cmd_help(message: types.Message):
         "/projects · /new · /project · /summary · /brain\n\n"
         "*📈 Портфель*\n"
         "/portfolio · /buy · /sell · /pnl · /export\n\n"
-        "*🇬🇧 Английский*\n"
-        "/en — меню модуля\n"
-        "/en\\_start — placement test (входная оценка)\n"
-        "/en\\_unit N — установить юнит учебника\n"
-        "/en\\_block — блок упражнений (~10 мин)\n"
-        "/en\\_review — повторение SRS\n"
-        "/en\\_speak — speaking practice\n"
-        "/en\\_lesson — отчёт с урока с учителем\n"
-        "/en\\_homework — мои ДЗ\n"
-        "/en\\_progress — прогресс\n"
-        "/en\\_voice — голос TTS (uk\\_f / uk\\_m / us\\_f / us\\_m)\n"
-        "/en\\_grammar тема — справка\n"
-        "/vocab — словарь\n\n"
         "*📊 Метрики*\n"
         "/m · /stats · /pushups N · /digest · /briefing\n\n"
         "*✍️ Контент*\n"
@@ -308,7 +287,6 @@ async def main():
         content,
         cost,
         digest,
-        english,
         ideas,
         metrics,
         photo,
@@ -319,7 +297,6 @@ async def main():
         undo,
         voice,
     )
-    dp.include_router(english.router)  # english до voice — у english свои FSM-фильтры
     dp.include_router(tasks.router)
     dp.include_router(ideas.router)
     dp.include_router(content.router)
@@ -341,12 +318,6 @@ async def main():
     # Меню команд Telegram (синяя кнопка слева от поля ввода)
     await bot.set_my_commands([
         BotCommand(command="menu", description="☰ Главное меню"),
-        BotCommand(command="en", description="🇬🇧 English — меню модуля"),
-        BotCommand(command="en_block", description="▶️ Блок English (~10 мин)"),
-        BotCommand(command="en_review", description="🔄 Повторение SRS"),
-        BotCommand(command="en_speak", description="🗣 Speaking practice"),
-        BotCommand(command="en_lesson", description="📝 Отчёт с урока"),
-        BotCommand(command="en_progress", description="📊 Прогресс English"),
         BotCommand(command="tasks", description="🎯 Активные задачи"),
         BotCommand(command="ideas", description="💡 Идеи"),
         BotCommand(command="projects", description="📁 Проекты"),

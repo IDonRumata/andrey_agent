@@ -16,6 +16,12 @@ PROJECT_ALIASES = {
     "realtor": "realtor",
     "фокус": "fokus",
     "fokus": "fokus",
+    "sp500": "sp500-bounce-bot",
+    "s&p500": "sp500-bounce-bot",
+    "bounce": "sp500-bounce-bot",
+    "скринер": "sp500-bounce-bot",
+    "sp500-bounce-bot": "sp500-bounce-bot",
+    "sp500bounchbot": "sp500-bounce-bot",
 }
 
 # Динамические алиасы — подгружаются из БД при старте
@@ -54,6 +60,12 @@ IDEA_PATTERNS = [
 
 PROJECT_PATTERN = re.compile(
     r"^по проекту\s+(\S+)[\s\-—:,]*(.+)", re.IGNORECASE | re.DOTALL
+)
+
+# "добавление в проект X:", "обновление в проект X:", "в проект X:"
+PROJECT_NOTE_PATTERN = re.compile(
+    r"^(?:добавление|обновление|заметка|запись)\s+(?:в|по)\s+проект[уа]?\s+(\S+)[:\s\-—]*(.*)",
+    re.IGNORECASE | re.DOTALL,
 )
 
 SEARCH_PATTERNS = [
@@ -120,10 +132,6 @@ VOICE_COMMAND_PATTERNS: list[tuple[re.Pattern, str, dict]] = [
     (re.compile(r"сколько\s+(потратил|стоит)\s+(на\s+)?(ии|ai|клода|claude|искусственный\s+интеллект)|расходы\s+на\s+(ии|ai)", re.IGNORECASE), "cost", {}),
     # Статистика / метрики
     (re.compile(r"(покажи\s+)?(статистику|метрики|показатели)(\s+за\s+(неделю|месяц))?", re.IGNORECASE), "metrics", {}),
-    # English — повторение
-    (re.compile(r"слова\s+(на\s+)?повторени[ея]|что\s+повторять|повтори\s+слова|английские\s+слова", re.IGNORECASE), "english_review", {}),
-    # English — тест
-    (re.compile(r"(английский\s+)?тест|проверь\s+(мои\s+)?(знани[ея]|слова)|протестируй", re.IGNORECASE), "english_test", {}),
     # Выполнил задачу (по тексту) — исключить отжимания, продажи, метрики
     (re.compile(r"(выполнил|завершил|закрыл|готово)\s+(.+)", re.IGNORECASE), "done_task", {}),
     (re.compile(r"сделал\s+(?!.*(?:от[жш][иеы]мани|pushup|продаж|подход))(.+)", re.IGNORECASE), "done_task", {}),
@@ -144,20 +152,6 @@ def detect_voice_command(text: str) -> dict | None:
             result["project"] = detect_project(text)
             return result
     return None
-
-
-ENGLISH_KEYWORDS = [
-    "английск", "english", "по-английски",
-    "запомни слово", "новое слово", "добавь слово",
-    "запомни фразу", "как переводится", "что значит по-английски",
-    "grammar", "грамматик", "phrasal verb", "фразовый глагол",
-]
-
-
-def detect_english(text: str) -> bool:
-    """Определить — сообщение про изучение английского."""
-    text_lower = text.lower()
-    return any(kw in text_lower for kw in ENGLISH_KEYWORDS)
 
 
 def detect_pushups(text: str) -> int | None:
@@ -224,15 +218,21 @@ def classify_local(text: str) -> dict | None:
     if voice_cmd:
         return voice_cmd
 
-    # 0c. English — изучение языка
-    if detect_english(text):
+    # 1а. "Добавление/обновление в проект X: ..."
+    m = PROJECT_NOTE_PATTERN.match(text)
+    if m:
+        project_name = m.group(1).strip().rstrip(":")
+        content = m.group(2).strip() or text
+        project = PROJECT_ALIASES.get(project_name.lower()) or project_name.lower()
         return {
-            "type": "english",
-            "text": text,
+            "type": "note",
+            "project": project,
+            "project_name_raw": project_name,
+            "text": content,
             "source": "local",
         }
 
-    # 1. Привязка к проекту: "по проекту X — ..."
+    # 1б. Привязка к проекту: "по проекту X — ..."
     m = PROJECT_PATTERN.match(text)
     if m:
         project_name = m.group(1).strip()
